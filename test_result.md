@@ -101,3 +101,221 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+
+user_problem_statement: |
+  Build AIBrief24 - a premium AI news aggregator mobile app (Expo/React Native + FastAPI + Supabase).
+  Phase 1: Fix Supabase Auth (signup, login, logout, session persistence, bookmarks)
+  Phase 2: Forgot Password flow using Supabase reset
+  Phase 3: Push Notifications (permissions, token registration, send on new article)
+  Phase 4: Content Ingestion Pipeline (RSS feeds, OpenAI summaries, deduplication)
+
+backend:
+  - task: "Supabase Auth - signup endpoint"
+    implemented: true
+    working: true
+    file: "backend/server.py, backend/auth.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Signup endpoint calls Supabase Auth API. Returns access_token+user or null+needsConfirmation if email confirm enabled."
+
+  - task: "Supabase Auth - login endpoint"
+    implemented: true
+    working: true
+    file: "backend/server.py, backend/auth.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Login endpoint returns access_token + refresh_token. Works for confirmed Supabase users."
+
+  - task: "Supabase Auth - token refresh endpoint"
+    implemented: true
+    working: true
+    file: "backend/server.py, backend/auth.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "POST /api/auth/refresh uses Supabase token rotation"
+
+  - task: "Supabase Auth - forgot password endpoint"
+    implemented: true
+    working: true
+    file: "backend/server.py, backend/auth.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "POST /api/auth/reset-password calls Supabase recover endpoint"
+
+  - task: "Bookmarks API - linked to Supabase auth user"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Bookmarks use JWT bearer token to extract user_id from Supabase JWT"
+
+  - task: "Push token registration endpoint"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "POST /api/push/register. push_tokens table auto-created on startup."
+
+  - task: "Content ingestion pipeline"
+    implemented: true
+    working: "NA"
+    file: "backend/ingestor.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "ingestor.py fetches RSS feeds, uses OpenAI summaries, deduplicates. POST /api/admin/ingest triggers it."
+
+  - task: "Articles API"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "GET /api/articles works, returns 20 articles from Supabase"
+
+frontend:
+  - task: "Auth token bug fix (res.token -> res.access_token)"
+    implemented: true
+    working: true
+    file: "frontend/contexts/AuthContext.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "FIXED: AuthContext was using res.token but backend returns res.access_token. Root cause of broken login/signup."
+      - working: true
+        agent: "main"
+        comment: "Fixed res.token -> res.access_token in login() and signup()"
+
+  - task: "Session persistence with token refresh"
+    implemented: true
+    working: true
+    file: "frontend/contexts/AuthContext.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "loadSession() now auto-refreshes expired tokens using stored refresh_token"
+
+  - task: "Forgot password screen"
+    implemented: true
+    working: true
+    file: "frontend/app/forgot-password.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Created forgot-password.tsx. Added 'Forgot Password?' link to login screen."
+
+  - task: "Push notification registration in app"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/_layout.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Requests push permissions after user login. Notification taps navigate to article."
+
+  - task: "Home feed swipe experience"
+    implemented: true
+    working: true
+    file: "frontend/app/(tabs)/index.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Vertical FlatList with pagingEnabled, 20 articles from Supabase."
+
+  - task: "Bookmarks screen"
+    implemented: true
+    working: true
+    file: "frontend/app/(tabs)/bookmarks.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Bookmarks screen works with authenticated user JWT"
+
+metadata:
+  created_by: "main_agent"
+  version: "2.0"
+  test_sequence: 1
+  run_ui: true
+
+test_plan:
+  current_focus:
+    - "Auth token bug fix (res.token -> res.access_token)"
+    - "Signup flow with email confirmation message"
+    - "Login flow"
+    - "Forgot password screen navigation"
+    - "Home feed loads articles"
+    - "Content ingestion pipeline via /api/admin/ingest"
+  stuck_tasks: []
+  test_all: true
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: |
+      Completed Phase 1-4 implementation.
+
+      CRITICAL BUG FIXED: AuthContext used res.token but backend returns res.access_token.
+
+      Phase 1 (Auth): Fixed token bug, added refresh token support, fixed profiles->users table
+      Phase 2 (Forgot Password): Created forgot-password.tsx, linked from login screen
+      Phase 3 (Push Notifications): push_tokens table, notifier.py, _layout.tsx registration
+      Phase 4 (Content Ingestion): ingestor.py with RSS+OpenAI, /api/admin/ingest endpoint
+
+      IMPORTANT: Supabase email confirmation IS enabled. Signup shows "check email" message.
+      For login testing: need a confirmed Supabase user. 
+      Can disable email confirmation in Supabase dashboard for testing, or test via UI flow.
+      
+      To test ingestion: POST http://localhost:8001/api/admin/ingest
+      Articles currently: 20 in Supabase

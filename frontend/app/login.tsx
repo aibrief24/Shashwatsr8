@@ -64,6 +64,10 @@ export default function LoginScreen() {
               </LinearGradient>
             </TouchableOpacity>
 
+            <TouchableOpacity testID="forgot-password-btn" style={styles.forgotRow} onPress={() => router.push('/forgot-password' as any)}>
+              <Text style={styles.forgotText}>Forgot Password?</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity testID="go-to-signup-btn" style={styles.switchRow} onPress={() => router.push('/signup')}>
               <Text style={styles.switchText}>Don't have an account? </Text>
               <Text style={styles.switchLink}>Sign Up</Text>
@@ -95,4 +99,6 @@ const styles = StyleSheet.create({
   switchRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 24 },
   switchText: { color: Colors.textSecondary, fontSize: FontSize.sm },
   switchLink: { color: Colors.primary, fontSize: FontSize.sm, fontWeight: '600' },
+  forgotRow: { alignItems: 'center', marginTop: 12, marginBottom: 4 },
+  forgotText: { color: Colors.primary, fontSize: FontSize.sm, fontWeight: '600' },
 });

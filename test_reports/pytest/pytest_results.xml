@@ -1,1 +1,128 @@
-<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="0" skipped="0" tests="24" time="5.447" timestamp="2026-03-12T09:46:22.154554+00:00" hostname="agent-env-129448ea-c654-4fda-9e62-a84a568e3f04"><testcase classname="tests.test_aibrief_api.TestHealth" name="test_health_check" time="0.211" /><testcase classname="tests.test_aibrief_api.TestAuth" name="test_signup_success" time="0.422" /><testcase classname="tests.test_aibrief_api.TestAuth" name="test_signup_duplicate_email" time="0.376" /><testcase classname="tests.test_aibrief_api.TestAuth" name="test_login_success" time="0.603" /><testcase classname="tests.test_aibrief_api.TestAuth" name="test_login_invalid_credentials" time="0.102" /><testcase classname="tests.test_aibrief_api.TestAuth" name="test_get_me_authenticated" time="0.381" /><testcase classname="tests.test_aibrief_api.TestAuth" name="test_get_me_no_token" time="0.100" /><testcase classname="tests.test_aibrief_api.TestArticles" name="test_get_articles_default" time="0.097" /><testcase classname="tests.test_aibrief_api.TestArticles" name="test_get_articles_with_category" time="0.151" /><testcase classname="tests.test_aibrief_api.TestArticles" name="test_get_articles_with_limit" time="0.093" /><testcase classname="tests.test_aibrief_api.TestArticles" name="test_get_article_by_id" time="0.161" /><testcase classname="tests.test_aibrief_api.TestArticles" name="test_get_article_by_id_not_found" time="0.102" /><testcase classname="tests.test_aibrief_api.TestArticles" name="test_search_articles" time="0.102" /><testcase classname="tests.test_aibrief_api.TestArticles" name="test_search_articles_empty_query" time="0.104" /><testcase classname="tests.test_aibrief_api.TestArticles" name="test_get_breaking_articles" time="0.096" /><testcase classname="tests.test_aibrief_api.TestCategories" name="test_get_categories" time="0.099" /><testcase classname="tests.test_aibrief_api.TestBookmarks" name="test_add_bookmark" time="0.421" /><testcase classname="tests.test_aibrief_api.TestBookmarks" name="test_get_bookmarks" time="0.450" /><testcase classname="tests.test_aibrief_api.TestBookmarks" name="test_remove_bookmark" time="0.471" /><testcase classname="tests.test_aibrief_api.TestBookmarks" name="test_get_bookmark_ids" time="0.390" /><testcase classname="tests.test_aibrief_api.TestBookmarks" name="test_bookmarks_no_auth" time="0.108" /><testcase classname="tests.test_aibrief_api.TestSettings" name="test_get_settings" time="0.111" /><testcase classname="tests.test_aibrief_api.TestPushNotifications" name="test_register_push_token" time="0.095" /><testcase classname="tests.test_aibrief_api.TestSources" name="test_get_sources" time="0.097" /></testsuite></testsuites>
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="5" skipped="0" tests="29" time="142.574" timestamp="2026-03-12T11:29:33.306088+00:00" hostname="agent-env-3f376ccd-07be-4f4c-aab4-49252202653f"><testcase classname="backend.tests.test_aibrief_api.TestHealth" name="test_health_check" time="1.703" /><testcase classname="backend.tests.test_aibrief_api.TestHealth" name="test_api_root" time="0.139" /><testcase classname="backend.tests.test_aibrief_api.TestAuth" name="test_signup_returns_200" time="0.831"><failure message="AssertionError: Signup failed with status 429: {&quot;detail&quot;:&quot;email rate limit exceeded&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code">backend/tests/test_aibrief_api.py:71: in test_signup_returns_200
+    assert response.status_code == 200, f"Signup failed with status {response.status_code}: {response.text}"
+E   AssertionError: Signup failed with status 429: {"detail":"email rate limit exceeded"}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_aibrief_api.TestAuth" name="test_signup_user_fields" time="0.488"><failure message="assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code">backend/tests/test_aibrief_api.py:82: in test_signup_user_fields
+    assert response.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_aibrief_api.TestAuth" name="test_login_invalid_credentials" time="0.399" /><testcase classname="backend.tests.test_aibrief_api.TestAuth" name="test_get_me_no_token" time="0.150" /><testcase classname="backend.tests.test_aibrief_api.TestAuth" name="test_get_me_invalid_token" time="0.405" /><testcase classname="backend.tests.test_aibrief_api.TestAuth" name="test_forgot_password_returns_200" time="0.391" /><testcase classname="backend.tests.test_aibrief_api.TestAuth" name="test_logout_no_token" time="0.110" /><testcase classname="backend.tests.test_aibrief_api.TestArticles" name="test_get_articles_default" time="1.783" /><testcase classname="backend.tests.test_aibrief_api.TestArticles" name="test_get_articles_structure" time="1.540" /><testcase classname="backend.tests.test_aibrief_api.TestArticles" name="test_get_articles_shows_20_minimum" time="1.558" /><testcase classname="backend.tests.test_aibrief_api.TestArticles" name="test_get_articles_with_limit" time="1.574" /><testcase classname="backend.tests.test_aibrief_api.TestArticles" name="test_get_articles_with_category" time="1.534" /><testcase classname="backend.tests.test_aibrief_api.TestArticles" name="test_get_article_by_id" time="2.311" /><testcase classname="backend.tests.test_aibrief_api.TestArticles" name="test_get_article_not_found" time="0.827"><failure message="AssertionError: Non-existent article should return 404, got 500&#10;assert 500 == 404&#10; +  where 500 = &lt;Response [500]&gt;.status_code">backend/tests/test_aibrief_api.py:208: in test_get_article_not_found
+    assert response.status_code == 404, f"Non-existent article should return 404, got {response.status_code}"
+E   AssertionError: Non-existent article should return 404, got 500
+E   assert 500 == 404
+E    +  where 500 = &lt;Response [500]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_aibrief_api.TestArticles" name="test_search_articles" time="0.828" /><testcase classname="backend.tests.test_aibrief_api.TestArticles" name="test_search_articles_empty_query" time="0.115" /><testcase classname="backend.tests.test_aibrief_api.TestArticles" name="test_get_breaking_articles" time="0.806" /><testcase classname="backend.tests.test_aibrief_api.TestCategories" name="test_get_categories" time="0.833" /><testcase classname="backend.tests.test_aibrief_api.TestCategories" name="test_categories_have_count" time="0.830" /><testcase classname="backend.tests.test_aibrief_api.TestBookmarks" name="test_bookmarks_no_auth" time="0.116" /><testcase classname="backend.tests.test_aibrief_api.TestBookmarks" name="test_bookmark_ids_no_auth" time="0.112" /><testcase classname="backend.tests.test_aibrief_api.TestBookmarks" name="test_add_bookmark_no_auth" time="0.098" /><testcase classname="backend.tests.test_aibrief_api.TestSettings" name="test_get_settings" time="0.838" /><testcase classname="backend.tests.test_aibrief_api.TestPushNotifications" name="test_register_push_token" time="0.824" /><testcase classname="backend.tests.test_aibrief_api.TestSources" name="test_get_sources" time="0.816" /><testcase classname="backend.tests.test_aibrief_api.TestAdminIngest" name="test_admin_ingest_endpoint_returns_200" time="60.101"><failure message="requests.exceptions.ReadTimeout: HTTPSConnectionPool(host='ai-brief-mobile.preview.emergentagent.com', port=443): Read timed out. (read timeout=60)">/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:534: in _make_request
+    response = conn.getresponse()
+               ^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/urllib3/connection.py:571: in getresponse
+    httplib_response = super().getresponse()
+                       ^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/http/client.py:1395: in getresponse
+    response.begin()
+/usr/local/lib/python3.11/http/client.py:325: in begin
+    version, status, reason = self._read_status()
+                              ^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/http/client.py:286: in _read_status
+    line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/socket.py:718: in readinto
+    return self._sock.recv_into(b)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/ssl.py:1314: in recv_into
+    return self.read(nbytes, buffer)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/ssl.py:1166: in read
+    return self._sslobj.read(len, buffer)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TimeoutError: The read operation timed out
+
+The above exception was the direct cause of the following exception:
+/root/.venv/lib/python3.11/site-packages/requests/adapters.py:644: in send
+    resp = conn.urlopen(
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:841: in urlopen
+    retries = retries.increment(
+/root/.venv/lib/python3.11/site-packages/urllib3/util/retry.py:490: in increment
+    raise reraise(type(error), error, _stacktrace)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/urllib3/util/util.py:39: in reraise
+    raise value
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:787: in urlopen
+    response = self._make_request(
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:536: in _make_request
+    self._raise_timeout(err=e, url=url, timeout_value=read_timeout)
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:367: in _raise_timeout
+    raise ReadTimeoutError(
+E   urllib3.exceptions.ReadTimeoutError: HTTPSConnectionPool(host='ai-brief-mobile.preview.emergentagent.com', port=443): Read timed out. (read timeout=60)
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_aibrief_api.py:354: in test_admin_ingest_endpoint_returns_200
+    response = api_client.post(f"{BASE_URL}/api/admin/ingest", timeout=60)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:637: in post
+    return self.request("POST", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:589: in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:703: in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/adapters.py:690: in send
+    raise ReadTimeout(e, request=request)
+E   requests.exceptions.ReadTimeout: HTTPSConnectionPool(host='ai-brief-mobile.preview.emergentagent.com', port=443): Read timed out. (read timeout=60)</failure></testcase><testcase classname="backend.tests.test_aibrief_api.TestAdminIngest" name="test_admin_ingest_response_structure" time="60.174"><failure message="requests.exceptions.ReadTimeout: HTTPSConnectionPool(host='ai-brief-mobile.preview.emergentagent.com', port=443): Read timed out. (read timeout=60)">/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:534: in _make_request
+    response = conn.getresponse()
+               ^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/urllib3/connection.py:571: in getresponse
+    httplib_response = super().getresponse()
+                       ^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/http/client.py:1395: in getresponse
+    response.begin()
+/usr/local/lib/python3.11/http/client.py:325: in begin
+    version, status, reason = self._read_status()
+                              ^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/http/client.py:286: in _read_status
+    line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/socket.py:718: in readinto
+    return self._sock.recv_into(b)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/ssl.py:1314: in recv_into
+    return self.read(nbytes, buffer)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/ssl.py:1166: in read
+    return self._sslobj.read(len, buffer)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TimeoutError: The read operation timed out
+
+The above exception was the direct cause of the following exception:
+/root/.venv/lib/python3.11/site-packages/requests/adapters.py:644: in send
+    resp = conn.urlopen(
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:841: in urlopen
+    retries = retries.increment(
+/root/.venv/lib/python3.11/site-packages/urllib3/util/retry.py:490: in increment
+    raise reraise(type(error), error, _stacktrace)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/urllib3/util/util.py:39: in reraise
+    raise value
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:787: in urlopen
+    response = self._make_request(
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:536: in _make_request
+    self._raise_timeout(err=e, url=url, timeout_value=read_timeout)
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:367: in _raise_timeout
+    raise ReadTimeoutError(
+E   urllib3.exceptions.ReadTimeoutError: HTTPSConnectionPool(host='ai-brief-mobile.preview.emergentagent.com', port=443): Read timed out. (read timeout=60)
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_aibrief_api.py:363: in test_admin_ingest_response_structure
+    response = api_client.post(f"{BASE_URL}/api/admin/ingest", timeout=60)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:637: in post
+    return self.request("POST", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:589: in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:703: in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/adapters.py:690: in send
+    raise ReadTimeout(e, request=request)
+E   requests.exceptions.ReadTimeout: HTTPSConnectionPool(host='ai-brief-mobile.preview.emergentagent.com', port=443): Read timed out. (read timeout=60)</failure></testcase></testsuite></testsuites>

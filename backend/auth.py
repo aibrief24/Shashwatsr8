@@ -1,41 +1,95 @@
 import os
+import httpx
+import logging
 from pathlib import Path
 from dotenv import load_dotenv
-from jose import jwt, JWTError
-from passlib.context import CryptContext
-from datetime import datetime, timedelta, timezone
 from fastapi import Request, HTTPException
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-JWT_SECRET = os.environ.get("JWT_SECRET", "aibrief24-fallback-secret")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_HOURS = 72
+logger = logging.getLogger(__name__)
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY")
+AUTH_URL = f"{SUPABASE_URL}/auth/v1"
 
+_http = httpx.Client(timeout=15)
 
-def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
-
-
-def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
-
-
-def create_access_token(data: dict) -> str:
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, JWT_SECRET, algorithm=ALGORITHM)
+HEADERS = {
+    "apikey": SUPABASE_ANON_KEY,
+    "Content-Type": "application/json",
+}
 
 
-def decode_token(token: str) -> dict:
-    try:
-        return jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+def supabase_signup(email: str, password: str):
+    res = _http.post(
+        f"{AUTH_URL}/signup",
+        json={"email": email, "password": password},
+        headers=HEADERS,
+    )
+    data = res.json()
+    if res.status_code >= 400:
+        msg = data.get("msg") or data.get("message") or data.get("error_description") or "Signup failed"
+        raise HTTPException(res.status_code, msg)
+    return data
+
+
+def supabase_login(email: str, password: str):
+    res = _http.post(
+        f"{AUTH_URL}/token?grant_type=password",
+        json={"email": email, "password": password},
+        headers=HEADERS,
+    )
+    data = res.json()
+    if res.status_code >= 400:
+        msg = data.get("error_description") or data.get("msg") or data.get("message") or "Invalid email or password"
+        raise HTTPException(res.status_code, msg)
+    return data
+
+
+def supabase_get_user(access_token: str):
+    res = _http.get(
+        f"{AUTH_URL}/user",
+        headers={**HEADERS, "Authorization": f"Bearer {access_token}"},
+    )
+    data = res.json()
+    if res.status_code >= 400:
+        raise HTTPException(401, "Invalid or expired token")
+    return data
+
+
+def supabase_refresh_token(refresh_token: str):
+    res = _http.post(
+        f"{AUTH_URL}/token?grant_type=refresh_token",
+        json={"refresh_token": refresh_token},
+        headers=HEADERS,
+    )
+    data = res.json()
+    if res.status_code >= 400:
+        raise HTTPException(401, "Session expired, please login again")
+    return data
+
+
+def supabase_reset_password(email: str):
+    res = _http.post(
+        f"{AUTH_URL}/recover",
+        json={"email": email},
+        headers=HEADERS,
+    )
+    if res.status_code >= 400:
+        data = res.json()
+        msg = data.get("msg") or data.get("message") or "Failed to send reset email"
+        raise HTTPException(res.status_code, msg)
+    return {"success": True, "message": "Password reset email sent"}
+
+
+def supabase_logout(access_token: str):
+    _http.post(
+        f"{AUTH_URL}/logout",
+        headers={**HEADERS, "Authorization": f"Bearer {access_token}"},
+    )
+    return {"success": True}
 
 
 def get_current_user(request: Request) -> dict:
@@ -43,4 +97,5 @@ def get_current_user(request: Request) -> dict:
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing auth token")
     token = auth_header.split(" ")[1]
-    return decode_token(token)
+    user = supabase_get_user(token)
+    return {"sub": user.get("id", ""), "email": user.get("email", ""), "user": user}

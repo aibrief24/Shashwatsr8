@@ -15,8 +15,9 @@ interface AuthState {
   hasOnboarded: boolean;
   bookmarkIds: string[];
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, name: string) => Promise<void>;
+  signup: (email: string, password: string, name: string) => Promise<{ needsConfirmation?: boolean }>;
   logout: () => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
   completeOnboarding: () => Promise<void>;
   toggleBookmark: (articleId: string) => Promise<void>;
   isBookmarked: (articleId: string) => boolean;
@@ -36,24 +37,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loadSession();
   }, []);
 
+  const clearStoredAuth = async () => {
+    await AsyncStorage.multiRemove(['auth_token', 'auth_refresh_token']);
+  };
+
   const loadSession = async () => {
     try {
-      const [savedToken, onboarded] = await Promise.all([
+      const [savedToken, savedRefresh, onboarded] = await Promise.all([
         AsyncStorage.getItem('auth_token'),
+        AsyncStorage.getItem('auth_refresh_token'),
         AsyncStorage.getItem('has_onboarded'),
       ]);
       setHasOnboarded(onboarded === 'true');
       if (savedToken) {
-        const userData = await api.getMe(savedToken);
-        setUser(userData);
-        setToken(savedToken);
         try {
-          const bm = await api.getBookmarkIds(savedToken);
-          setBookmarkIds(bm.ids || []);
-        } catch {}
+          const userData = await api.getMe(savedToken);
+          setUser(userData);
+          setToken(savedToken);
+          try {
+            const bm = await api.getBookmarkIds(savedToken);
+            setBookmarkIds(bm.ids || []);
+          } catch {}
+        } catch {
+          // Token expired — try refresh
+          if (savedRefresh) {
+            try {
+              const refreshRes = await api.refreshToken(savedRefresh);
+              const newToken = refreshRes.access_token;
+              const newRefresh = refreshRes.refresh_token;
+              if (newToken) {
+                await AsyncStorage.setItem('auth_token', newToken);
+                if (newRefresh) await AsyncStorage.setItem('auth_refresh_token', newRefresh);
+                const userData = await api.getMe(newToken);
+                setUser(userData);
+                setToken(newToken);
+                try {
+                  const bm = await api.getBookmarkIds(newToken);
+                  setBookmarkIds(bm.ids || []);
+                } catch {}
+              } else {
+                await clearStoredAuth();
+              }
+            } catch {
+              await clearStoredAuth();
+            }
+          } else {
+            await clearStoredAuth();
+          }
+        }
       }
     } catch {
-      await AsyncStorage.removeItem('auth_token');
+      await clearStoredAuth();
     } finally {
       setLoading(false);
     }
@@ -61,27 +95,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const res = await api.login(email, password);
+    const accessToken = res.access_token;
+    if (!accessToken) throw new Error('Login failed: no token returned');
     setUser(res.user);
-    setToken(res.token);
-    await AsyncStorage.setItem('auth_token', res.token);
+    setToken(accessToken);
+    await AsyncStorage.setItem('auth_token', accessToken);
+    if (res.refresh_token) await AsyncStorage.setItem('auth_refresh_token', res.refresh_token);
     try {
-      const bm = await api.getBookmarkIds(res.token);
+      const bm = await api.getBookmarkIds(accessToken);
       setBookmarkIds(bm.ids || []);
     } catch {}
   };
 
-  const signup = async (email: string, password: string, name: string) => {
+  const signup = async (email: string, password: string, name: string): Promise<{ needsConfirmation?: boolean }> => {
     const res = await api.signup(email, password, name);
-    setUser(res.user);
-    setToken(res.token);
-    await AsyncStorage.setItem('auth_token', res.token);
+    const accessToken = res.access_token;
+    if (accessToken) {
+      setUser(res.user);
+      setToken(accessToken);
+      await AsyncStorage.setItem('auth_token', accessToken);
+      if (res.refresh_token) await AsyncStorage.setItem('auth_refresh_token', res.refresh_token);
+      return { needsConfirmation: false };
+    }
+    // Email confirmation required — Supabase returned user but no session
+    return { needsConfirmation: true };
   };
 
   const logout = async () => {
+    try {
+      if (token) await api.logout(token);
+    } catch {}
     setUser(null);
     setToken(null);
     setBookmarkIds([]);
-    await AsyncStorage.removeItem('auth_token');
+    await clearStoredAuth();
+  };
+
+  const forgotPassword = async (email: string) => {
+    await api.forgotPassword(email);
   };
 
   const completeOnboarding = async () => {
@@ -113,7 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [token]);
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, hasOnboarded, bookmarkIds, login, signup, logout, completeOnboarding, toggleBookmark, isBookmarked, refreshBookmarks }}>
+    <AuthContext.Provider value={{ user, token, loading, hasOnboarded, bookmarkIds, login, signup, logout, forgotPassword, completeOnboarding, toggleBookmark, isBookmarked, refreshBookmarks }}>
       {children}
     </AuthContext.Provider>
   );

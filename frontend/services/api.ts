@@ -31,6 +31,15 @@ export const api = {
   getMe: (token: string) =>
     request('/auth/me', { headers: authHeaders(token) }),
 
+  logout: (token: string) =>
+    request('/auth/logout', { method: 'POST', headers: authHeaders(token) }),
+
+  refreshToken: (refreshToken: string) =>
+    request('/auth/refresh', { method: 'POST', body: JSON.stringify({ refresh_token: refreshToken }) }),
+
+  forgotPassword: (email: string) =>
+    request('/auth/reset-password', { method: 'POST', body: JSON.stringify({ email }) }),
+
   // Articles
   getArticles: (category?: string, limit = 50, offset = 0) => {
     const params = new URLSearchParams();
@@ -69,13 +78,17 @@ export const api = {
       headers: authHeaders(token),
     }),
 
-  // Push
-  registerPushToken: (token: string, platform: string) =>
-    request('/push/register', { method: 'POST', body: JSON.stringify({ token, platform }) }),
+  // Push Notifications
+  registerPushToken: (pushToken: string, platform: string) =>
+    request('/push/register', { method: 'POST', body: JSON.stringify({ token: pushToken, platform }) }),
 
   // Settings
   getSettings: () => request('/settings'),
 
   // Health
   health: () => request('/health'),
+
+  // Admin
+  triggerIngestion: () =>
+    request('/admin/ingest', { method: 'POST' }),
 };

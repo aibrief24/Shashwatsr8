@@ -22,8 +22,12 @@ export default function SignupScreen() {
     setError('');
     setLoading(true);
     try {
-      await signup(email, password, name);
-      router.replace('/(tabs)');
+      const res = await signup(email.trim().toLowerCase(), password, name.trim());
+      if (res?.needsConfirmation) {
+        setError('Account created! Please check your email to confirm your account, then sign in.');
+      } else {
+        router.replace('/(tabs)');
+      }
     } catch (e: any) {
       setError(e.message || 'Signup failed');
     } finally {

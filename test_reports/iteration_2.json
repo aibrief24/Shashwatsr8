@@ -1,0 +1,74 @@
+{
+  "summary": "Comprehensive testing of AIBrief24 Phase 1-4 features. Backend: 24/27 passed (2 skipped due to Supabase rate limits, 1 health transient 502 while ingestion was running). Frontend: All 15 required features verified working. Critical bug found: duplicate articles in DB from concurrent ingest runs. Admin ingest endpoint works internally but times out via public proxy (>60s sync response).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/admin/ingest",
+        "issue": "Concurrent ingest calls caused 514 DB articles with only ~170 unique URLs (duplicates 3-4x each). Race condition: `_article_exists()` check is NOT atomic with the INSERT. Fix: Add UNIQUE constraint on `article_url` column in articles table and use `ON CONFLICT (article_url) DO NOTHING`",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "GET /api/articles/{id}",
+        "issue": "Passing an invalid non-UUID string (e.g. 'invalid-id-99999') returns HTTP 500 instead of 404. PostgreSQL UUID cast error not caught by server. Fix: Validate UUID format before querying or catch PostgreSQL cast exception and return 404."
+      },
+      {
+        "endpoint": "POST /api/admin/ingest",
+        "issue": "Endpoint is synchronous and processes all RSS feeds + OpenAI calls in one request (~60-120s+). Via public proxy it times out (returns no response). Internally it works. Fix: Make ingest async (background task) and return a job ID or use streaming response."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Home Feed Article Display",
+        "issue": "Due to the duplicate articles DB bug (backend), the home feed shows duplicate article cards. E.g. 'When startups become a family business' appears 3 times. Caused by backend race condition, not a frontend bug.",
+        "affected_testIDs": ["feed-list", "article-title-0", "article-title-1", "article-title-2"]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "Various components",
+        "issue": "Console warning: 'shadow*' style props are deprecated. Use 'boxShadow' instead (non-blocking)"
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_aibrief_api.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "CRITICAL: Add UNIQUE constraint on `article_url` column in Supabase `articles` table. Update INSERT to use `ON CONFLICT (article_url) DO NOTHING`. Also clean up duplicate articles already in DB.",
+    "FIX: Catch PostgreSQL UUID cast error in `GET /api/articles/{id}` - return 404 when article_id is not a valid UUID format.",
+    "CONSIDER: Make POST /api/admin/ingest async (FastAPI BackgroundTasks) so it returns immediately and processes in background. Currently times out via public proxy.",
+    "MINOR: Signup shows 'email rate limit exceeded' in test (Supabase limits) - expected for test environment, not a code bug. The confirmation message flow ('Account created! Please check your email') is correctly implemented."
+  ],
+  "critical_code_review_comments": [
+    "CRITICAL BUG: articles table lacks UNIQUE constraint on article_url column. The ingest pipeline checks _article_exists() then inserts, but this is a non-atomic TOCTOU race. Multiple concurrent ingests insert duplicates (confirmed: 514 articles from ~170 unique URLs).",
+    "BUG: GET /api/articles/{article_id} does not validate UUID format - passes raw string to PostgreSQL which throws an exception causing 500 instead of 404.",
+    "WARN: POST /api/admin/ingest is a long-running synchronous endpoint (processes RSS + OpenAI API calls per article). No timeout handling, no async processing. Should use FastAPI BackgroundTasks.",
+    "✓ Auth token fix verified: AuthContext correctly uses res.access_token (old bug res.token was fixed)",
+    "✓ Forgot password screen implemented correctly with success state",
+    "✓ Signup correctly returns needsConfirmation=true when Supabase email confirmation is enabled",
+    "✓ All testID attributes present on interactive elements",
+    "✓ Settings logout button has testID='logout-btn' and shows 'Sign Out' text",
+    "✓ All 9 categories showing in categories grid with article counts",
+    "✓ Search screen working with trending searches and search results",
+    "✓ Bookmarks empty state showing correctly for unauthenticated users"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_aibrief_api.py"
+  ],
+  "success_rate": {
+    "backend": "89% (24/27 tests passed, 2 skipped due to Supabase rate limit, 1 transient 502)",
+    "frontend": "100% (all 15 required features verified working)"
+  },
+  "seed_data_creation": "No seed data created. Backend already had 153 articles before testing. Multiple ingest runs during testing added ~360+ duplicate articles (now 514 total with ~170 unique).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Core app is fully functional. Auth token bug (res.token -> res.access_token) is FIXED and verified. Forgot password flow works end-to-end. Main outstanding bug: duplicate articles in DB from concurrent ingest - add UNIQUE constraint on article_url. Admin ingest times out via public proxy. Supabase email confirmation enabled so signup tests will always need email confirmation. All frontend screens verified working including Login, Forgot Password, Signup, Home Feed, Search, Categories, Bookmarks, Settings.",
+  "rca_of_issue": "Duplicate Articles Bug RCA: The ingest pipeline uses _article_exists(url) check before INSERT. Without a UNIQUE constraint on article_url and atomic check+insert, multiple concurrent ingest calls (3 were triggered during testing: 2 from pytest admin tests + 1 from curl) all read 'article not in DB', then all inserted the same article with different UUIDs. The ON CONFLICT DO NOTHING clause only protects against id (UUID PK) conflicts, not article_url conflicts. Mitigation: 1) Add UNIQUE constraint on article_url in Supabase. 2) Update INSERT to ON CONFLICT (article_url) DO NOTHING. 3) Clean duplicate rows with: DELETE FROM articles WHERE id NOT IN (SELECT MIN(id) FROM articles GROUP BY article_url). Reproduction: POST /api/admin/ingest 3 times concurrently."
+}

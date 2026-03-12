@@ -9,14 +9,16 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timezone
 
-from auth import hash_password, verify_password, create_access_token, get_current_user
+from auth import (
+    supabase_signup, supabase_login, supabase_get_user,
+    supabase_refresh_token, supabase_reset_password, supabase_logout,
+    get_current_user,
+)
 from database import query, execute, insert_returning
+from notifier import send_expo_notifications
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
-
-app = FastAPI(title="AIBrief24 API")
-api_router = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,6 +27,29 @@ CATEGORIES = [
     "Latest", "AI Tools", "AI Startups", "AI Models", "AI Research",
     "Funding News", "Product Launches", "Big Tech AI", "Open Source AI"
 ]
+
+# ─── DB Migrations ────────────────────────────────────────────────────────────
+
+def _run_migrations():
+    """Create any tables that might be missing."""
+    try:
+        execute("""
+            CREATE TABLE IF NOT EXISTS push_tokens (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                token TEXT UNIQUE NOT NULL,
+                platform TEXT DEFAULT 'unknown',
+                user_id TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        logger.info("push_tokens table ready")
+    except Exception as e:
+        logger.warning(f"Migration warning (push_tokens): {e}")
+
+_run_migrations()
+
+app = FastAPI(title="AIBrief24 API")
+api_router = APIRouter(prefix="/api")
 
 # ─── Models ───────────────────────────────────────────────────────────────────
 
@@ -44,10 +69,15 @@ class PushTokenRequest(BaseModel):
     token: str
     platform: str = "unknown"
 
+class ResetPasswordRequest(BaseModel):
+    email: str
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
 # ─── Helper: serialize rows ──────────────────────────────────────────────────
 
 def _serialize(row: dict) -> dict:
-    """Convert UUID/datetime fields to strings for JSON."""
     out = {}
     for k, v in row.items():
         if k == '_id':
@@ -63,46 +93,114 @@ def _serialize(row: dict) -> dict:
 def _serialize_list(rows: list) -> list:
     return [_serialize(r) for r in rows]
 
-# ─── Auth ─────────────────────────────────────────────────────────────────────
+# ─── Helper: upsert profile ──────────────────────────────────────────────────
+
+def _upsert_profile(user_id: str, email: str, name: str = ""):
+    """Store basic user profile data. Uses 'users' table as profile store."""
+    try:
+        execute(
+            "INSERT INTO users (id, email) VALUES (%s, %s) ON CONFLICT (id) DO UPDATE SET email = %s",
+            (user_id, email, email)
+        )
+    except Exception as e:
+        logger.warning(f"Profile upsert error (non-blocking): {e}")
+
+# ─── Auth (Supabase Auth) ────────────────────────────────────────────────────
 
 @api_router.post("/auth/signup")
 def signup(req: SignupRequest):
-    email = req.email.lower().strip()
-    existing = query("SELECT id FROM users WHERE email = %s", (email,))
-    if existing:
-        raise HTTPException(400, "Email already registered")
-    user_id = str(uuid.uuid4())
-    name = req.name or email.split("@")[0]
-    execute(
-        "INSERT INTO users (id, email, name, password_hash) VALUES (%s, %s, %s, %s)",
-        (user_id, email, name, hash_password(req.password))
-    )
-    token = create_access_token({"sub": user_id, "email": email})
-    return {"token": token, "user": {"id": user_id, "email": email, "name": name}}
+    data = supabase_signup(req.email, req.password)
+    user = data.get("user", {}) or {}
+    session = data.get("session") or data  # session may be at top level
+    access_token = data.get("access_token") or (session.get("access_token") if isinstance(session, dict) else None)
+    refresh_token = data.get("refresh_token") or (session.get("refresh_token") if isinstance(session, dict) else None)
+    user_id = user.get("id", "")
+    email = user.get("email", req.email)
+
+    # Create profile entry
+    if user_id:
+        _upsert_profile(user_id, email, req.name)
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "user": {
+            "id": user_id,
+            "email": email,
+            "name": req.name or email.split("@")[0],
+        },
+    }
 
 
 @api_router.post("/auth/login")
 def login(req: LoginRequest):
-    email = req.email.lower().strip()
-    rows = query("SELECT id, email, name, password_hash FROM users WHERE email = %s", (email,))
-    if not rows:
-        raise HTTPException(401, "Invalid email or password")
-    user = rows[0]
-    if not verify_password(req.password, user["password_hash"]):
-        raise HTTPException(401, "Invalid email or password")
-    uid = str(user["id"])
-    token = create_access_token({"sub": uid, "email": email})
-    return {"token": token, "user": {"id": uid, "email": email, "name": user["name"]}}
+    data = supabase_login(req.email, req.password)
+    user = data.get("user", {}) or {}
+    user_id = user.get("id", "")
+    email = user.get("email", req.email)
+
+    # Upsert profile on login
+    if user_id:
+        _upsert_profile(user_id, email)
+
+    # Get display name from profile
+    name = email.split("@")[0]
+    try:
+        rows = query("SELECT name FROM profiles WHERE id = %s", (user_id,))
+        if rows and rows[0].get("name"):
+            name = rows[0]["name"]
+    except Exception:
+        pass
+
+    return {
+        "access_token": data.get("access_token", ""),
+        "refresh_token": data.get("refresh_token", ""),
+        "user": {
+            "id": user_id,
+            "email": email,
+            "name": email.split("@")[0] if email else "",
+        },
+    }
 
 
 @api_router.get("/auth/me")
 def get_me(request: Request):
     payload = get_current_user(request)
-    uid = payload.get("sub", "")
-    rows = query("SELECT id, email, name FROM users WHERE id = %s", (uid,))
-    if not rows:
-        raise HTTPException(404, "User not found")
-    return _serialize(rows[0])
+    user_id = payload["sub"]
+    email = payload["email"]
+    name = email.split("@")[0] if email else ""
+    return {"id": user_id, "email": email, "name": name}
+
+
+@api_router.post("/auth/refresh")
+def refresh(req: RefreshTokenRequest):
+    data = supabase_refresh_token(req.refresh_token)
+    user = data.get("user", {}) or {}
+    return {
+        "access_token": data.get("access_token", ""),
+        "refresh_token": data.get("refresh_token", ""),
+        "user": {
+            "id": user.get("id", ""),
+            "email": user.get("email", ""),
+        },
+    }
+
+
+@api_router.post("/auth/reset-password")
+def reset_password(req: ResetPasswordRequest):
+    return supabase_reset_password(req.email)
+
+
+@api_router.post("/auth/logout")
+def logout(request: Request):
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+        try:
+            supabase_logout(token)
+        except Exception:
+            pass
+    return {"success": True}
 
 # ─── Articles ─────────────────────────────────────────────────────────────────
 
@@ -157,14 +255,14 @@ def get_categories():
     counts = {r["category"]: r["cnt"] for r in (rows or [])}
     return {"categories": [{"name": c, "count": counts.get(c, 0)} for c in CATEGORIES]}
 
-# ─── Bookmarks ────────────────────────────────────────────────────────────────
+# ─── Bookmarks (uses Supabase Auth user ID) ──────────────────────────────────
 
 @api_router.get("/bookmarks")
 def get_bookmarks(request: Request):
     payload = get_current_user(request)
     uid = payload["sub"]
     rows = query(
-        "SELECT a.* FROM articles a INNER JOIN bookmarks b ON a.id = b.article_id WHERE b.user_id = %s ORDER BY b.created_at DESC",
+        "SELECT a.* FROM articles a INNER JOIN bookmarks b ON a.id::text = b.article_id::text WHERE b.user_id = %s ORDER BY b.created_at DESC",
         (uid,)
     )
     return {"bookmarks": _serialize_list(rows or [])}
@@ -176,7 +274,7 @@ def add_bookmark(req: BookmarkRequest, request: Request):
     uid = payload["sub"]
     try:
         execute(
-            "INSERT INTO bookmarks (user_id, article_id) VALUES (%s, %s) ON CONFLICT (user_id, article_id) DO NOTHING",
+            "INSERT INTO bookmarks (user_id, article_id) VALUES (%s, %s::uuid) ON CONFLICT (user_id, article_id) DO NOTHING",
             (uid, req.article_id)
         )
     except Exception as e:
@@ -188,7 +286,7 @@ def add_bookmark(req: BookmarkRequest, request: Request):
 def remove_bookmark(article_id: str, request: Request):
     payload = get_current_user(request)
     uid = payload["sub"]
-    execute("DELETE FROM bookmarks WHERE user_id = %s AND article_id = %s", (uid, article_id))
+    execute("DELETE FROM bookmarks WHERE user_id = %s AND article_id::text = %s", (uid, article_id))
     return {"success": True, "message": "Removed"}
 
 
@@ -203,12 +301,14 @@ def get_bookmark_ids(request: Request):
 
 @api_router.post("/push/register")
 def register_push_token(req: PushTokenRequest):
-    execute(
-        "INSERT INTO push_tokens (token, platform) VALUES (%s, %s) ON CONFLICT (token) DO UPDATE SET platform = %s",
-        (req.token, req.platform, req.platform)
-    )
+    try:
+        execute(
+            "INSERT INTO push_tokens (token, platform) VALUES (%s, %s) ON CONFLICT (token) DO UPDATE SET platform = %s",
+            (req.token, req.platform, req.platform)
+        )
+    except Exception as e:
+        logger.warning(f"Push token register error: {e}")
     return {"success": True}
-
 
 @api_router.post("/push/send")
 def send_notification(article_id: str = ""):
@@ -217,12 +317,64 @@ def send_notification(article_id: str = ""):
         raise HTTPException(404, "Article not found")
     article = rows[0]
     title_text = f"AIBrief24: {str(article['title'])[:60]}"
-    body_text = str(article['summary'])[:120] + "..."
-    log_row = insert_returning(
-        "INSERT INTO notification_logs (article_id, title, body, status, provider_response) VALUES (%s, %s, %s, %s, %s) RETURNING id, article_id, title, body, sent_at, status",
-        (article_id, title_text, body_text, "queued", "Push notification queued for delivery")
+    body_text = str(article.get('summary', ''))[:120] + "..."
+
+    # Fetch all registered push tokens
+    token_rows = query("SELECT token FROM push_tokens")
+    token_list = [r['token'] for r in (token_rows or [])]
+
+    # Send via Expo Push API
+    result = send_expo_notifications(
+        token_list,
+        title_text,
+        body_text,
+        data={"article_id": article_id}
     )
-    return {"success": True, "log": _serialize(log_row) if log_row else {}}
+
+    # Log notification
+    try:
+        insert_returning(
+            "INSERT INTO notification_logs (article_id, status, provider_response) VALUES (%s, %s, %s) RETURNING id",
+            (article_id, "sent", str(result))
+        )
+    except Exception as e:
+        logger.warning(f"Notification log error: {e}")
+
+    return {"success": True, "sent": result.get("sent", 0), "errors": result.get("errors", 0), "tokens": len(token_list)}
+
+# ─── Admin ────────────────────────────────────────────────────────────────────
+
+@api_router.post("/admin/ingest")
+def trigger_ingestion():
+    """Manually trigger the content ingestion pipeline."""
+    try:
+        from ingestor import run_ingestion
+        result = run_ingestion()
+
+        # Send push notifications for new articles if any were added
+        if result.get("total", 0) > 0:
+            try:
+                new_rows = query(
+                    "SELECT id FROM articles WHERE status = 'published' ORDER BY published_at DESC LIMIT %s",
+                    (result["total"],)
+                )
+                if new_rows:
+                    token_rows = query("SELECT token FROM push_tokens")
+                    tokens = [r['token'] for r in (token_rows or [])]
+                    if tokens:
+                        send_expo_notifications(
+                            tokens,
+                            "🤖 New AI Stories",
+                            f"{result['total']} new AI articles just dropped on AIBrief24",
+                            data={"type": "new_articles"}
+                        )
+            except Exception as e:
+                logger.warning(f"Post-ingest notification error: {e}")
+
+        return result
+    except Exception as e:
+        logger.error(f"Ingestion error: {e}")
+        raise HTTPException(500, f"Ingestion failed: {str(e)}")
 
 # ─── Settings ─────────────────────────────────────────────────────────────────
 
@@ -249,17 +401,17 @@ def health():
         src_count = query("SELECT count(*) as cnt FROM sources")
         return {
             "status": "ok",
-            "database": "supabase",
+            "auth": "supabase_auth",
+            "database": "supabase_postgres",
             "articles_count": art_count[0]["cnt"] if art_count else 0,
             "sources_count": src_count[0]["cnt"] if src_count else 0,
         }
     except Exception as e:
         return {"status": "error", "detail": str(e)}
 
-
 @api_router.get("/")
 def root():
-    return {"app": "AIBrief24", "version": "1.0.0", "tagline": "AI News in 60 Seconds"}
+    return {"app": "AIBrief24", "version": "2.0.0", "tagline": "AI News in 60 Seconds", "auth": "supabase"}
 
 # ─── App Setup ────────────────────────────────────────────────────────────────
 
