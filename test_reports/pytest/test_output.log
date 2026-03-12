@@ -1,0 +1,34 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.14, pytest-9.0.2, pluggy-1.6.0 -- /root/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /app/backend
+plugins: anyio-4.12.1
+collecting ... collected 24 items
+
+tests/test_aibrief_api.py::TestHealth::test_health_check PASSED          [  4%]
+tests/test_aibrief_api.py::TestAuth::test_signup_success PASSED          [  8%]
+tests/test_aibrief_api.py::TestAuth::test_signup_duplicate_email PASSED  [ 12%]
+tests/test_aibrief_api.py::TestAuth::test_login_success PASSED           [ 16%]
+tests/test_aibrief_api.py::TestAuth::test_login_invalid_credentials PASSED [ 20%]
+tests/test_aibrief_api.py::TestAuth::test_get_me_authenticated PASSED    [ 25%]
+tests/test_aibrief_api.py::TestAuth::test_get_me_no_token PASSED         [ 29%]
+tests/test_aibrief_api.py::TestArticles::test_get_articles_default PASSED [ 33%]
+tests/test_aibrief_api.py::TestArticles::test_get_articles_with_category PASSED [ 37%]
+tests/test_aibrief_api.py::TestArticles::test_get_articles_with_limit PASSED [ 41%]
+tests/test_aibrief_api.py::TestArticles::test_get_article_by_id PASSED   [ 45%]
+tests/test_aibrief_api.py::TestArticles::test_get_article_by_id_not_found PASSED [ 50%]
+tests/test_aibrief_api.py::TestArticles::test_search_articles PASSED     [ 54%]
+tests/test_aibrief_api.py::TestArticles::test_search_articles_empty_query PASSED [ 58%]
+tests/test_aibrief_api.py::TestArticles::test_get_breaking_articles PASSED [ 62%]
+tests/test_aibrief_api.py::TestCategories::test_get_categories PASSED    [ 66%]
+tests/test_aibrief_api.py::TestBookmarks::test_add_bookmark PASSED       [ 70%]
+tests/test_aibrief_api.py::TestBookmarks::test_get_bookmarks PASSED      [ 75%]
+tests/test_aibrief_api.py::TestBookmarks::test_remove_bookmark PASSED    [ 79%]
+tests/test_aibrief_api.py::TestBookmarks::test_get_bookmark_ids PASSED   [ 83%]
+tests/test_aibrief_api.py::TestBookmarks::test_bookmarks_no_auth PASSED  [ 87%]
+tests/test_aibrief_api.py::TestSettings::test_get_settings PASSED        [ 91%]
+tests/test_aibrief_api.py::TestPushNotifications::test_register_push_token PASSED [ 95%]
+tests/test_aibrief_api.py::TestSources::test_get_sources PASSED          [100%]
+
+------- generated xml file: /app/test_reports/pytest/pytest_results.xml --------
+============================== 24 passed in 5.45s ==============================
