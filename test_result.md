@@ -319,3 +319,61 @@ agent_communication:
       
       To test ingestion: POST http://localhost:8001/api/admin/ingest
       Articles currently: 20 in Supabase
+
+
+  - task: "Image variety and source_url / article_url data quality"
+    implemented: true
+    working: true
+    file: "backend/ingestor.py, backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: |
+          Fixed all data quality issues:
+          - 261 articles, 0 missing article_url
+          - 0 missing source_url (all clean homepage domains via migration)
+          - 31 unique images from 25-image pool (HASHTEXT-based selection)
+          - Unique index on article_url prevents future duplicates
+          - ingestor.py: RSS image > og:image from HTML > pool fallback
+          - Fresh ingestion ran: 14 new articles added
+          - Duplicate cleanup: 267 duplicates removed (514 -> 247 -> 261)
+
+  - task: "Content ingestion pipeline improvements"
+    implemented: true
+    working: true
+    file: "backend/ingestor.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: |
+          ingestor.py completely rewritten:
+          - _get_source_url() extracts domain from feed URL
+          - _extract_rss_image() tries media:content, media:thumbnail, enclosures
+          - _fetch_og_image() reads first 50KB of article HTML for og:image/twitter:image
+          - _pick_image() uses HASHTEXT for deterministic varied image from 25-image pool
+          - INSERT now includes source_url and notification_sent=false
+          - run_ingestion returns new_article_ids list
+          - ON CONFLICT DO NOTHING prevents duplicates (unique index enforces at DB level)
+
+  - task: "Push notifications - only for new unique articles"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: |
+          /admin/ingest endpoint:
+          - Uses new_article_ids from ingestor (only truly new articles)
+          - Sends ONE aggregated push notification (not per-article spam)
+          - Marks all new articles notification_sent=true
+          - Fully idempotent - running again won't re-notify

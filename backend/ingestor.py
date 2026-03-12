@@ -12,6 +12,8 @@ import sys
 import uuid
 import logging
 import feedparser
+import requests
+from urllib.parse import urlparse
 from datetime import datetime, timezone
 from pathlib import Path
 from dotenv import load_dotenv
@@ -24,10 +26,17 @@ from database import query, execute
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
+# ─── Optional deps ────────────────────────────────────────────────────────────
+try:
+    from bs4 import BeautifulSoup
+    _bs4_available = True
+except ImportError:
+    _bs4_available = False
+
 # ─── OpenAI setup ─────────────────────────────────────────────────────────────
 try:
-    import openai
-    _openai_client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    import openai as _openai_mod
+    _openai_client = _openai_mod.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
     _openai_available = bool(os.environ.get("OPENAI_API_KEY"))
 except Exception:
     _openai_available = False
@@ -47,34 +56,28 @@ CATEGORY_KEYWORDS = {
 
 DEFAULT_CATEGORY = "AI Tools"
 
-# Pool of high-quality, varied AI/tech themed images from Unsplash
-# Enough variety to keep the feed visually interesting
+# ─── Image pool ───────────────────────────────────────────────────────────────
 IMAGE_POOL = [
-    # AI/Abstract/Neural
     "https://images.unsplash.com/photo-1677442135703-1787eea5ce01?w=800&q=80",
     "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=800&q=80",
     "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=800&q=80",
     "https://images.unsplash.com/photo-1561736778-92e52a7769ef?w=800&q=80",
     "https://images.unsplash.com/photo-1555255707-c07966088b7b?w=800&q=80",
-    # Tech/Computers
     "https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&q=80",
     "https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=800&q=80",
     "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&q=80",
     "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&q=80",
     "https://images.unsplash.com/photo-1488229297570-58520851e68a?w=800&q=80",
-    # Data/Network
     "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&q=80",
     "https://images.unsplash.com/photo-1509228468518-180dd4864904?w=800&q=80",
     "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&q=80",
     "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&q=80",
     "https://images.unsplash.com/photo-1617042375876-a13e36732a04?w=800&q=80",
-    # Business/Startup
     "https://images.unsplash.com/photo-1553877522-43269d4ea984?w=800&q=80",
     "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&q=80",
     "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80",
     "https://images.unsplash.com/photo-1535378917042-10a22c95931a?w=800&q=80",
     "https://images.unsplash.com/photo-1573164713712-03790a178651?w=800&q=80",
-    # Science/Research
     "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=800&q=80",
     "https://images.unsplash.com/photo-1582719471384-894fbb16e074?w=800&q=80",
     "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=800&q=80",
@@ -89,6 +92,17 @@ def _pick_image(seed: str) -> str:
     return IMAGE_POOL[idx]
 
 
+def _get_source_url(feed_url: str) -> str:
+    """Extract homepage URL from RSS feed URL.
+    e.g. https://theverge.com/rss/index.xml -> https://theverge.com
+    """
+    try:
+        parsed = urlparse(feed_url)
+        return f"{parsed.scheme}://{parsed.netloc}"
+    except Exception:
+        return feed_url
+
+
 def _detect_category(title: str, text: str) -> str:
     combined = f"{title} {text}".lower()
     for cat, keywords in CATEGORY_KEYWORDS.items():
@@ -98,10 +112,9 @@ def _detect_category(title: str, text: str) -> str:
 
 
 def _generate_summary(title: str, content: str) -> str:
-    """Use OpenAI to generate a 2-3 sentence summary."""
+    """Use OpenAI to generate a 2-3 sentence summary. Falls back to truncated content."""
     if not _openai_available or not content.strip():
-        # Fallback: use first 400 chars of content
-        return (content[:400] + "...") if len(content) > 400 else content
+        return (content[:400] + "...") if len(content) > 400 else (content or title)
 
     try:
         resp = _openai_client.chat.completions.create(
@@ -109,11 +122,11 @@ def _generate_summary(title: str, content: str) -> str:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a concise AI news summarizer. Write 2-3 clear, informative sentences that capture the key points. No fluff, no markdown.",
+                    "content": "You are a concise AI news summarizer. Write 2-3 clear, informative sentences. No fluff, no markdown.",
                 },
                 {
                     "role": "user",
-                    "content": f"Summarize this article:\n\nTitle: {title}\n\nContent: {content[:3000]}",
+                    "content": f"Summarize:\n\nTitle: {title}\n\nContent: {content[:3000]}",
                 },
             ],
             max_tokens=150,
@@ -122,7 +135,7 @@ def _generate_summary(title: str, content: str) -> str:
         return resp.choices[0].message.content.strip()
     except Exception as e:
         logger.warning(f"OpenAI summary failed: {e}")
-        return (content[:400] + "...") if len(content) > 400 else content
+        return (content[:400] + "...") if len(content) > 400 else (content or title)
 
 
 def _article_exists(article_url: str) -> bool:
@@ -133,39 +146,75 @@ def _article_exists(article_url: str) -> bool:
         return False
 
 
-def _extract_image(entry) -> str | None:
+def _extract_rss_image(entry) -> str | None:
     """Try to extract an image URL from a feed entry. Returns None if not found."""
-    # media:content
     if hasattr(entry, "media_content") and entry.media_content:
         url = entry.media_content[0].get("url", "")
         if url:
             return url
-    # media:thumbnail
     if hasattr(entry, "media_thumbnail") and entry.media_thumbnail:
         url = entry.media_thumbnail[0].get("url", "")
         if url:
             return url
-    # enclosures
     for enc in getattr(entry, "enclosures", []):
         if "image" in enc.get("type", ""):
-            return enc.get("href", "")
+            href = enc.get("href", "")
+            if href:
+                return href
     return None
 
 
-def ingest_source(source: dict, dry_run: bool = False) -> int:
-    """Ingest articles from a single RSS source. Returns count of new articles."""
-    count = 0
+def _fetch_og_image(article_url: str) -> str | None:
+    """Fetch og:image or twitter:image from article HTML.
+    Reads only first 50KB for speed. Returns None on any failure.
+    """
+    if not _bs4_available:
+        return None
+    try:
+        res = requests.get(
+            article_url,
+            timeout=5,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; AIBrief24Bot/1.0)"},
+            allow_redirects=True,
+            stream=True,
+        )
+        content = b""
+        for chunk in res.iter_content(chunk_size=8192):
+            content += chunk
+            if len(content) >= 51200:
+                break
+
+        soup = BeautifulSoup(content, "html.parser")
+
+        for prop in ("og:image", "twitter:image"):
+            tag = soup.find("meta", property=prop) or soup.find("meta", attrs={"name": prop})
+            if tag and tag.get("content"):
+                img = tag["content"].strip()
+                if img.startswith("http"):
+                    return img
+    except Exception:
+        pass
+    return None
+
+
+def ingest_source(source: dict, dry_run: bool = False) -> list:
+    """Ingest articles from a single RSS source.
+    Returns list of newly inserted article IDs.
+    """
+    new_ids = []
+    source_url = _get_source_url(source["url"])
+
     try:
         feed = feedparser.parse(source["url"], request_headers={"User-Agent": "AIBrief24/1.0"})
         if feed.bozo and not feed.entries:
             logger.warning(f"Bad feed from {source['name']}: {feed.bozo_exception}")
-            return 0
+            return new_ids
 
         for entry in feed.entries[:15]:  # Max 15 per source
-            url = entry.get("link", "").strip()
-            if not url:
+            article_url = entry.get("link", "").strip()
+            if not article_url:
                 continue
-            if _article_exists(url):
+            if _article_exists(article_url):
                 continue
 
             title = entry.get("title", "Untitled").strip()
@@ -183,60 +232,71 @@ def ingest_source(source: dict, dry_run: bool = False) -> int:
 
             summary = _generate_summary(title, content)
             category = source.get("category_hint") or _detect_category(title, summary)
-            # Use feed image if available, otherwise pick a varied one from the pool
-            image_url = _extract_image(entry) or _pick_image(article_id)
-            article_id = str(uuid.uuid4())
+
+            # Assign ID first so we can use it in _pick_image fallback
+            new_id = str(uuid.uuid4())
+
+            # Image priority: RSS media > og:image from HTML > pool fallback
+            image_url = (
+                _extract_rss_image(entry)
+                or _fetch_og_image(article_url)
+                or _pick_image(new_id)
+            )
 
             if dry_run:
                 logger.info(f"[DRY RUN] Would add: {title[:60]}")
-                count += 1
+                new_ids.append(new_id)
                 continue
 
             execute(
                 """
                 INSERT INTO articles (
-                    id, title, summary, image_url, source_name, article_url,
-                    category, published_at, status, is_breaking
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'published', false)
+                    id, title, summary, image_url, source_name, source_url, article_url,
+                    category, published_at, status, is_breaking, notification_sent
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'published', false, false)
                 ON CONFLICT DO NOTHING
                 """,
-                (article_id, title, summary, image_url, source["name"], url, category, pub_dt),
+                (new_id, title, summary, image_url, source["name"], source_url,
+                 article_url, category, pub_dt),
             )
-            count += 1
-            logger.info(f"Added [{category}]: {title[:70]}")
+            new_ids.append(new_id)
+            logger.info(f"Added [{category}] {source['name']}: {title[:55]}")
 
     except Exception as e:
         logger.error(f"Error ingesting {source.get('name', 'unknown')}: {e}")
 
-    return count
+    return new_ids
 
 
 def run_ingestion(dry_run: bool = False) -> dict:
-    """Run the full content ingestion pipeline."""
+    """Run the full content ingestion pipeline.
+    Returns dict with new_article_ids for targeted push notifications.
+    """
     try:
         sources = query("SELECT * FROM sources WHERE active = true ORDER BY name")
     except Exception as e:
-        return {"status": "error", "message": str(e), "total": 0}
+        return {"status": "error", "message": str(e), "total": 0, "new_article_ids": []}
 
     if not sources:
-        return {"status": "no_sources", "total": 0, "results": []}
+        return {"status": "no_sources", "total": 0, "results": [], "new_article_ids": []}
 
     logger.info(f"Starting ingestion of {len(sources)} sources (dry_run={dry_run})")
 
-    total = 0
+    all_new_ids = []
     results = []
     for source in sources:
-        n = ingest_source(source, dry_run=dry_run)
-        total += n
-        if n > 0:
-            results.append({"source": source["name"], "new_articles": n})
+        new_ids = ingest_source(source, dry_run=dry_run)
+        if new_ids:
+            all_new_ids.extend(new_ids)
+            results.append({"source": source["name"], "new_articles": len(new_ids)})
 
-    logger.info(f"Ingestion complete: {total} new articles")
+    logger.info(f"Ingestion complete: {len(all_new_ids)} new articles from {len(sources)} sources")
     return {
         "status": "done",
-        "total": total,
+        "total": len(all_new_ids),
         "sources_processed": len(sources),
         "results": results,
+        "new_article_ids": all_new_ids,
         "dry_run": dry_run,
     }
 

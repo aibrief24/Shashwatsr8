@@ -31,20 +31,74 @@ CATEGORIES = [
 # ─── DB Migrations ────────────────────────────────────────────────────────────
 
 def _run_migrations():
-    """Create any tables that might be missing."""
+    """Create missing tables and ensure data integrity constraints."""
+    conn = None
     try:
-        execute("""
-            CREATE TABLE IF NOT EXISTS push_tokens (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                token TEXT UNIQUE NOT NULL,
-                platform TEXT DEFAULT 'unknown',
-                user_id TEXT,
-                created_at TIMESTAMPTZ DEFAULT NOW()
-            )
-        """)
-        logger.info("push_tokens table ready")
+        from database import _pool
+        conn = _pool.getconn()
+        with conn.cursor() as cur:
+            # 1. push_tokens table
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS push_tokens (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    token TEXT UNIQUE NOT NULL,
+                    platform TEXT DEFAULT 'unknown',
+                    user_id TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+
+            # 2. Unique index on article_url to prevent duplicates
+            cur.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_articles_article_url
+                ON articles(article_url)
+                WHERE article_url IS NOT NULL AND article_url != ''
+            """)
+
+            # 3. Fix source_url: set to homepage domain from sources table
+            cur.execute("""
+                UPDATE articles a
+                SET source_url = regexp_replace(s.url, '^(https?://[^/]+).*', '\\1')
+                FROM sources s
+                WHERE a.source_name = s.name
+                  AND (a.source_url IS NULL OR a.source_url = '')
+            """)
+            sources_fixed = cur.rowcount
+
+            # 4. Clean any source_url that still has a path component (feed URLs etc.)
+            cur.execute("""
+                UPDATE articles
+                SET source_url = regexp_replace(source_url, '^(https?://[^/]+).*', '\\1')
+                WHERE source_url ~ '^https?://[^/]+/.+'
+            """)
+            path_fixed = cur.rowcount
+
+            # 5. Final fallback: extract domain from article_url for any remaining missing source_url
+            cur.execute("""
+                UPDATE articles
+                SET source_url = regexp_replace(article_url, '^(https?://[^/]+).*', '\\1')
+                WHERE (source_url IS NULL OR source_url = '')
+                  AND article_url IS NOT NULL AND article_url != ''
+            """)
+            domain_fixed = cur.rowcount
+
+            conn.commit()
+        logger.info(f"Migrations done: push_tokens ready, unique index on article_url, "
+                    f"source_url fixed for {sources_fixed + domain_fixed} articles")
     except Exception as e:
-        logger.warning(f"Migration warning (push_tokens): {e}")
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        logger.warning(f"Migration warning: {e}")
+    finally:
+        if conn:
+            try:
+                from database import _pool
+                _pool.putconn(conn)
+            except Exception:
+                pass
 
 _run_migrations()
 
@@ -346,26 +400,49 @@ def send_notification(article_id: str = ""):
 
 @api_router.post("/admin/ingest")
 def trigger_ingestion():
-    """Manually trigger the content ingestion pipeline."""
+    """Trigger content ingestion pipeline. Sends push notifications only for newly added articles."""
     try:
         from ingestor import run_ingestion
         result = run_ingestion()
 
-        # Send push notifications for new articles if any were added
-        if result.get("total", 0) > 0:
+        new_ids = result.get("new_article_ids", [])
+        push_result = {"sent": 0, "errors": 0}
+
+        if new_ids:
             try:
                 token_rows = query("SELECT token FROM push_tokens")
                 tokens = [r['token'] for r in (token_rows or [])]
                 if tokens:
-                    send_expo_notifications(
-                        tokens,
-                        "🤖 New AI Stories",
-                        f"{result['total']} new AI articles just dropped on AIBrief24",
-                        data={"type": "new_articles"}
+                    count = len(new_ids)
+                    # Fetch one representative article title for the notification
+                    sample_rows = query(
+                        "SELECT title FROM articles WHERE id = %s::uuid LIMIT 1",
+                        (new_ids[0],)
                     )
+                    sample_title = sample_rows[0]["title"][:60] if sample_rows else "New AI stories"
+                    push_result = send_expo_notifications(
+                        tokens,
+                        "🤖 New on AIBrief24",
+                        f"{count} new article{'s' if count > 1 else ''} — {sample_title}",
+                        data={"type": "new_articles", "article_id": new_ids[0]}
+                    )
+
+                # Mark all new articles as notification_sent regardless of token count
+                from database import _pool as pool_ref
+                conn = pool_ref.getconn()
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "UPDATE articles SET notification_sent = true WHERE id = ANY(%s::uuid[])",
+                            (new_ids,)
+                        )
+                        conn.commit()
+                finally:
+                    pool_ref.putconn(conn)
             except Exception as e:
                 logger.warning(f"Post-ingest notification error: {e}")
 
+        result["push"] = push_result
         return result
     except Exception as e:
         logger.error(f"Ingestion error: {e}")
