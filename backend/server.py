@@ -354,20 +354,15 @@ def trigger_ingestion():
         # Send push notifications for new articles if any were added
         if result.get("total", 0) > 0:
             try:
-                new_rows = query(
-                    "SELECT id FROM articles WHERE status = 'published' ORDER BY published_at DESC LIMIT %s",
-                    (result["total"],)
-                )
-                if new_rows:
-                    token_rows = query("SELECT token FROM push_tokens")
-                    tokens = [r['token'] for r in (token_rows or [])]
-                    if tokens:
-                        send_expo_notifications(
-                            tokens,
-                            "🤖 New AI Stories",
-                            f"{result['total']} new AI articles just dropped on AIBrief24",
-                            data={"type": "new_articles"}
-                        )
+                token_rows = query("SELECT token FROM push_tokens")
+                tokens = [r['token'] for r in (token_rows or [])]
+                if tokens:
+                    send_expo_notifications(
+                        tokens,
+                        "🤖 New AI Stories",
+                        f"{result['total']} new AI articles just dropped on AIBrief24",
+                        data={"type": "new_articles"}
+                    )
             except Exception as e:
                 logger.warning(f"Post-ingest notification error: {e}")
 
@@ -375,6 +370,35 @@ def trigger_ingestion():
     except Exception as e:
         logger.error(f"Ingestion error: {e}")
         raise HTTPException(500, f"Ingestion failed: {str(e)}")
+
+@api_router.post("/admin/fix-images")
+def fix_article_images():
+    """Update all articles with varied images from the pool using a single bulk SQL statement."""
+    try:
+        from ingestor import IMAGE_POOL
+        from database import _pool
+        n = len(IMAGE_POOL)
+        case_parts = " ".join([f"WHEN ({i}) THEN '{img}'" for i, img in enumerate(IMAGE_POOL)])
+        sql = f"""
+            UPDATE articles
+            SET image_url = CASE (ABS(HASHTEXT(id::text)) % {n})
+              {case_parts}
+              ELSE '{IMAGE_POOL[0]}'
+            END
+        """
+        conn = _pool.getconn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(sql)
+                updated = cur.rowcount
+                conn.commit()
+        finally:
+            _pool.putconn(conn)
+        logger.info(f"Bulk-updated images for {updated} articles")
+        return {"updated": updated, "message": f"Updated {updated} articles with varied images"}
+    except Exception as e:
+        logger.error(f"fix-images error: {e}")
+        raise HTTPException(500, str(e))
 
 # ─── Settings ─────────────────────────────────────────────────────────────────
 

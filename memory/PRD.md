@@ -1,78 +1,161 @@
-# AIBrief24 - Product Requirements Document
+# AIBrief24 — Product Requirements Document
 
 ## Overview
-**App Name:** AIBrief24  
-**Tagline:** AI News in 60 Seconds  
-**Package Name:** com.aibrief24.app  
-**Platform:** Android & iOS (React Native Expo)
+AIBrief24 is a premium, production-ready mobile application for Android and iOS. It is an AI-focused news aggregator with a swipe-based, summary-first reading experience similar to Inshorts.
 
-## Architecture
+## Problem Statement
+Busy professionals and AI enthusiasts want to stay updated on the rapidly evolving AI landscape without spending hours reading full articles. AIBrief24 delivers concise, AI-generated summaries in a beautiful, swipeable card interface.
 
-### Backend (FastAPI)
-- **Runtime:** Python 3.11 + FastAPI + Uvicorn (port 8001)
-- **Database:** In-memory data store (Supabase-ready architecture)
-  - Supabase REST API client configured
-  - SQL migration script available at `/api/setup-sql`
-  - Tables: articles, sources, users, bookmarks, app_settings, notification_logs, push_tokens
-- **Auth:** JWT-based (bcrypt + python-jose), 72-hour token expiry
-- **Content:** 20 seeded realistic AI news articles, 60 source configurations
-- **Push:** Full notification pipeline (registration + sending + logging)
+## Tech Stack
+- **Frontend:** React Native (Expo) with expo-router for file-based routing
+- **Backend:** FastAPI (Python)
+- **Database:** Supabase (PostgreSQL)
+- **Auth:** Supabase Auth (email/password)
+- **Notifications:** Expo Push Notifications
+- **Content:** RSS feed ingestion + OpenAI GPT-3.5-turbo for summaries
 
-### Frontend (Expo Router)
-- **Navigation:** File-based routing with expo-router
-  - Stack: splash → onboarding → auth → tabs
-  - Tabs: Feed | Explore | Saved | Settings
-  - Modals: article/[id], search
-- **State:** React Context (AuthContext with bookmark management)
-- **API:** Service layer at `/services/api.ts`
-- **Theme:** Dark mode, electric blue (#3B82F6) primary, purple (#8B5CF6) secondary
+## Core Features
+1. Vertical swipeable news feed (Inshorts-style)
+2. Article summaries (AI-generated via OpenAI)
+3. Categories: AI Tools, AI Startups, AI Models, AI Research, Funding News, Product Launches, Big Tech AI, Open Source AI
+4. Bookmark articles (requires auth)
+5. Share articles
+6. Read full source article
+7. Search articles
+8. Push notifications for new articles
+9. Forgot Password flow
 
 ## Screens
-1. **Splash** - Logo, tagline, auto-redirect (1.5s)
-2. **Onboarding** - 4 slides (Lightning Fast, Image+Summary, Bookmark+Share, Notifications)
-3. **Login/Signup** - Email/password JWT auth
-4. **Home Feed** - Vertical swipeable news cards (FlatList with pagingEnabled)
-5. **Article Detail** - Full hero image, summary, source, actions, CTAs
-6. **Categories** - 9 categories (AI Tools, Startups, Models, Research, Funding, etc.)
-7. **Bookmarks** - Saved articles list with remove option
-8. **Search** - Full-text search with trending suggestions
-9. **Settings** - User info, notifications toggle, Telegram/Website CTAs, logout
+- Splash → Onboarding → Login/Signup → Home Feed → Article Detail → Bookmarks → Categories → Search → Settings
 
-## Key Features
-- Vertical swipe news feed (Inshorts-style)
-- 20+ realistic AI news articles across 9 categories
-- JWT authentication with session persistence
-- Bookmark with instant toggle (synced to auth context)
-- Full-text article search
-- Article sharing via native share sheet
-- Telegram & Website CTA promotion
-- Push notification architecture (token registration, send pipeline, logs)
-- Deep linking support (article IDs)
-- 60+ configurable news sources
+## Database Schema
+- `articles`: {id, title, summary, image_url, source_name, article_url, category, published_at, status, is_breaking}
+- `sources`: {id, name, url, type, active, category_hint}
+- `bookmarks`: {id, user_id (fk to auth.users), article_id, created_at}
+- `app_settings`: {id, ...}
+- `notification_logs`: {id, article_id, status, ...}
+- `push_tokens`: {id, token, platform, user_id, created_at} — auto-created on startup
 
-## Environment Variables
+## Auth Architecture
+- Supabase Auth (email/password) — backend proxies auth to Supabase REST API
+- JWT tokens stored in AsyncStorage (access_token + refresh_token)
+- Auto-refresh on session restore
+- No custom password storage — all handled by Supabase
+- Email confirmation enabled in Supabase (users must confirm before login)
 
-### Backend (.env)
-- `SUPABASE_URL` - Supabase project URL
-- `SUPABASE_ANON_KEY` - Supabase anon key
-- `SUPABASE_DB_HOST/PORT/USER/PASSWORD/NAME` - Direct PostgreSQL connection
-- `OPENAI_API_KEY` - OpenAI API key for summary generation
-- `JWT_SECRET` - JWT signing secret
+## Backend Files
+- `server.py` — FastAPI app, all API endpoints
+- `auth.py` — Supabase Auth proxy functions
+- `database.py` — Supabase PostgreSQL connection pool
+- `notifier.py` — Expo Push API sender
+- `ingestor.py` — Content ingestion pipeline (RSS + OpenAI)
 
-### Frontend (.env)
-- `EXPO_PUBLIC_BACKEND_URL` - Backend API base URL
-- `EXPO_PUBLIC_SUPABASE_URL` - Supabase project URL
-- `EXPO_PUBLIC_SUPABASE_ANON_KEY` - Supabase public key
+## Frontend Structure
+```
+frontend/
+  app/
+    _layout.tsx         — Root layout, push notification setup, auth state
+    index.tsx           — Splash screen
+    onboarding.tsx      — Onboarding slides
+    login.tsx           — Login screen (with Forgot Password link)
+    signup.tsx          — Signup screen
+    forgot-password.tsx — Forgot password screen
+    (tabs)/
+      _layout.tsx       — Tab navigation
+      index.tsx         — Home feed (swipeable FlatList)
+      bookmarks.tsx     — Saved articles
+      categories.tsx    — Category grid
+      settings.tsx      — User settings + logout
+    article/
+      [id].tsx          — Article detail
+    search.tsx          — Search screen
+  contexts/
+    AuthContext.tsx     — Auth state (login, signup, logout, forgotPassword, bookmarks)
+  services/
+    api.ts              — Fetch-based API client
+  constants/
+    theme.ts            — Colors, typography, spacing
+  components/           — Reusable UI components
+```
 
-## Supabase Migration
-Run the SQL at `/api/setup-sql` in Supabase Dashboard → SQL Editor to create all tables with indexes and RLS policies disabled.
+---
 
-## Future-Ready
-- Premium subscription architecture
-- Ad placement slots
-- Topic following
-- Breaking news badges (already supported)
-- Daily digest notifications
-- Multilingual summaries
-- Trending AI tools section
-- News ingestion pipeline (modular: fetch → normalize → dedupe → categorize → summarize → store → notify)
+# CHANGELOG
+
+## Session 1 (Initial Build)
+- Built full project scaffold (Expo + FastAPI + Supabase)
+- Implemented all screens and navigation
+- Core swipeable news feed with FlatList + pagingEnabled
+- Supabase PostgreSQL integration for articles, sources, bookmarks
+- Connection pooling with psycopg2
+- Initial seed data: 20 articles, 60 sources
+
+## Session 2 (Auth Migration + Full Feature Completion) — March 2026
+
+### Phase 1: Fixed Auth (Critical Bug Fix)
+- **Root cause:** `AuthContext.tsx` used `res.token` but backend returns `res.access_token`
+- Fixed: `res.token → res.access_token` in `login()` and `signup()`
+- Added refresh token storage (`auth_refresh_token` in AsyncStorage)
+- Added auto-refresh on session restore when access token expires
+- Fixed `_upsert_profile` to use `users` table (profiles table doesn't exist)
+- Auth now fully working: signup (with email confirmation message), login, logout, session persistence
+
+### Phase 2: Forgot Password
+- Created `/app/frontend/app/forgot-password.tsx`
+- Added "Forgot Password?" link to login screen
+- Uses `/api/auth/reset-password` → Supabase `resetPasswordForEmail`
+- Success state shows "Check Your Email" confirmation
+
+### Phase 3: Push Notifications
+- Created `backend/notifier.py` — Expo Push API sender (batched, 100/request)
+- `push_tokens` table auto-created on backend startup
+- `/api/push/register` endpoint stores Expo push tokens
+- `/api/push/send` endpoint now actually sends via Expo Push API
+- Frontend (`_layout.tsx`): requests permissions after login, registers token, handles notification taps → navigates to article
+
+### Phase 4: Content Ingestion Pipeline
+- Created `backend/ingestor.py` — Full RSS pipeline
+  - Fetches from all active sources in DB
+  - OpenAI GPT-3.5-turbo for 2-3 sentence summaries
+  - Category auto-detection from keywords
+  - Deduplication via URL check before insert
+  - Image extraction from feed entries (media:content, media:thumbnail, enclosures)
+  - Fallback to varied images from 25-image pool
+- `/api/admin/ingest` endpoint triggers ingestion + sends push notifications
+- `/api/admin/fix-images` endpoint bulk-updates all articles with varied images
+
+### Image Fix
+- Root cause: All 514 articles had the same default Unsplash image
+- Fix: 25-image pool, each article gets image based on `HASHTEXT(id) % 25`
+- Bulk SQL update applied to all 247 remaining unique articles
+- Removed 267 duplicate articles from DB
+
+---
+
+# ROADMAP
+
+## P0 (Blocking) — DONE ✅
+- [x] Fix auth token bug (res.token → res.access_token)
+- [x] Supabase Auth migration complete
+
+## P1 (High Priority) — DONE ✅
+- [x] Forgot Password screen
+- [x] Session persistence with token refresh
+
+## P2 (Medium Priority) — DONE ✅
+- [x] Push notification pipeline (request permissions, register token, send)
+- [x] Content ingestion pipeline (RSS + OpenAI)
+- [x] Varied article images
+- [x] Duplicate article cleanup
+
+## P3 (Future)
+- [ ] Google Social Login
+- [ ] Premium subscriptions
+- [ ] Breaking news badge UI
+- [ ] Swipeable onboarding slides
+- [ ] Article image extraction from HTML (for RSS feeds without media tags)
+- [ ] Scheduled ingestion (cron job or Supabase Edge Functions)
+- [ ] Admin dashboard for content management
+- [ ] Row Level Security policies in Supabase (public read articles, user-only bookmarks)
+- [ ] Analytics (article views, popular categories)
+- [ ] Offline reading (cached articles)

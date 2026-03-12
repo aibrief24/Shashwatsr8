@@ -46,7 +46,47 @@ CATEGORY_KEYWORDS = {
 }
 
 DEFAULT_CATEGORY = "AI Tools"
-DEFAULT_IMAGE = "https://images.unsplash.com/photo-1677442135703-1787eea5ce01?w=800&q=80"
+
+# Pool of high-quality, varied AI/tech themed images from Unsplash
+# Enough variety to keep the feed visually interesting
+IMAGE_POOL = [
+    # AI/Abstract/Neural
+    "https://images.unsplash.com/photo-1677442135703-1787eea5ce01?w=800&q=80",
+    "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=800&q=80",
+    "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=800&q=80",
+    "https://images.unsplash.com/photo-1561736778-92e52a7769ef?w=800&q=80",
+    "https://images.unsplash.com/photo-1555255707-c07966088b7b?w=800&q=80",
+    # Tech/Computers
+    "https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&q=80",
+    "https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=800&q=80",
+    "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&q=80",
+    "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?w=800&q=80",
+    "https://images.unsplash.com/photo-1488229297570-58520851e68a?w=800&q=80",
+    # Data/Network
+    "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&q=80",
+    "https://images.unsplash.com/photo-1509228468518-180dd4864904?w=800&q=80",
+    "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&q=80",
+    "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&q=80",
+    "https://images.unsplash.com/photo-1617042375876-a13e36732a04?w=800&q=80",
+    # Business/Startup
+    "https://images.unsplash.com/photo-1553877522-43269d4ea984?w=800&q=80",
+    "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&q=80",
+    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800&q=80",
+    "https://images.unsplash.com/photo-1535378917042-10a22c95931a?w=800&q=80",
+    "https://images.unsplash.com/photo-1573164713712-03790a178651?w=800&q=80",
+    # Science/Research
+    "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=800&q=80",
+    "https://images.unsplash.com/photo-1582719471384-894fbb16e074?w=800&q=80",
+    "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=800&q=80",
+    "https://images.unsplash.com/photo-1614064641938-3bbee52942c7?w=800&q=80",
+    "https://images.unsplash.com/photo-1639762681057-408e52192e55?w=800&q=80",
+]
+
+
+def _pick_image(seed: str) -> str:
+    """Deterministically pick a varied image from the pool based on a seed string."""
+    idx = int(seed.replace("-", "")[:8], 16) % len(IMAGE_POOL)
+    return IMAGE_POOL[idx]
 
 
 def _detect_category(title: str, text: str) -> str:
@@ -93,8 +133,8 @@ def _article_exists(article_url: str) -> bool:
         return False
 
 
-def _extract_image(entry) -> str:
-    """Try to extract an image URL from a feed entry."""
+def _extract_image(entry) -> str | None:
+    """Try to extract an image URL from a feed entry. Returns None if not found."""
     # media:content
     if hasattr(entry, "media_content") and entry.media_content:
         url = entry.media_content[0].get("url", "")
@@ -109,7 +149,7 @@ def _extract_image(entry) -> str:
     for enc in getattr(entry, "enclosures", []):
         if "image" in enc.get("type", ""):
             return enc.get("href", "")
-    return DEFAULT_IMAGE
+    return None
 
 
 def ingest_source(source: dict, dry_run: bool = False) -> int:
@@ -143,7 +183,8 @@ def ingest_source(source: dict, dry_run: bool = False) -> int:
 
             summary = _generate_summary(title, content)
             category = source.get("category_hint") or _detect_category(title, summary)
-            image_url = _extract_image(entry)
+            # Use feed image if available, otherwise pick a varied one from the pool
+            image_url = _extract_image(entry) or _pick_image(article_id)
             article_id = str(uuid.uuid4())
 
             if dry_run:
