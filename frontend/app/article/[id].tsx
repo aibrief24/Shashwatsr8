@@ -99,7 +99,9 @@ export default function ArticleDetail() {
 
           <View style={styles.sourceRow}>
             <Text style={styles.sourceLabel}>Source:</Text>
-            <Text style={styles.sourceName}>{article.source_name}</Text>
+            <TouchableOpacity onPress={() => article.source_url && Linking.openURL(article.source_url)} activeOpacity={0.7}>
+              <Text style={styles.sourceName}>{article.source_name}</Text>
+            </TouchableOpacity>
           </View>
 
           <Text style={styles.summary}>{article.summary}</Text>

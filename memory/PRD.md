@@ -124,11 +124,51 @@ frontend/
 - `/api/admin/ingest` endpoint triggers ingestion + sends push notifications
 - `/api/admin/fix-images` endpoint bulk-updates all articles with varied images
 
-### Image Fix
-- Root cause: All 514 articles had the same default Unsplash image
-- Fix: 25-image pool, each article gets image based on `HASHTEXT(id) % 25`
-- Bulk SQL update applied to all 247 remaining unique articles
-- Removed 267 duplicate articles from DB
+## Session 3 (Data Quality + Ingestion Improvements) — March 2026
+
+### Issue Fixed: All Articles Same Image
+- Root cause: single `DEFAULT_IMAGE` fallback constant in ingestor
+- Fix: 25-image pool, `HASHTEXT(id::text) % 25` for deterministic varied selection
+- Bulk SQL update applied to all 514 (now 299) articles
+
+### Data Quality Improvements
+- `article_url`: verified 100% populated (all 299 articles)
+- `source_url`: 0 missing — fixed via PostgreSQL regex domain extraction
+  - Old feed URLs like `https://techcrunch.com/category/startups/feed` → `https://techcrunch.com`
+  - Migration is idempotent, runs on every server start
+- Unique index on `article_url` prevents all future duplicate ingestion
+- 267 duplicate articles removed (514 → 247)
+
+### Ingestion Pipeline Improvements (ingestor.py)
+- `_get_source_url()`: extracts homepage domain from RSS feed URL
+- `_extract_rss_image()`: tries media:content, media:thumbnail, enclosures
+- `_fetch_og_image()`: reads first 50KB of article HTML for og:image/twitter:image
+- `_pick_image()`: deterministic 25-image fallback pool
+- `_is_ai_relevant()`: filters non-AI articles from general tech sources (ZDNet etc.)
+- INSERT includes `source_url` and `notification_sent=false`
+- `run_ingestion()` returns `new_article_ids` list for targeted push notifications
+
+### Push Notification Improvements
+- Only sends ONE aggregated notification per ingestion run (not per-article spam)
+- Uses `notification_sent` column to track state — idempotent
+- Marks all new articles as `notification_sent=true` after sending
+- Invalid/test tokens gracefully skipped (DeviceNotRegistered handling)
+
+### Category Quality Improvements
+- Expanded CATEGORY_KEYWORDS with 3x more terms per category
+- Added AI_RELEVANCE_KEYWORDS filter (35 terms) for non-AI article rejection
+- `POST /admin/recategorize` endpoint re-categorizes existing "Latest" articles
+- Result: "Latest" reduced from 133+ to 22 articles (113 re-categorized)
+- Category distribution: AI Research 54, Product Launches 56, AI Tools 48, Big Tech AI 39...
+
+### New Admin Endpoints
+- `POST /admin/ingest` — trigger ingestion + push notifications for new articles
+- `POST /admin/fix-images` — bulk update images with HASHTEXT pool (single SQL)
+- `POST /admin/recategorize` — re-categorize "Latest" articles with improved keywords
+
+### Source Link Fix
+- Article detail screen: source name is now tappable → opens source homepage URL
+
 
 ---
 

@@ -448,7 +448,37 @@ def trigger_ingestion():
         logger.error(f"Ingestion error: {e}")
         raise HTTPException(500, f"Ingestion failed: {str(e)}")
 
-@api_router.post("/admin/fix-images")
+@api_router.post("/admin/recategorize")
+def recategorize_articles():
+    """Re-categorize all 'Latest' articles using the improved keyword set."""
+    try:
+        from ingestor import _detect_category
+        rows = query("SELECT id, title, summary FROM articles WHERE category = 'Latest' OR category IS NULL")
+        if not rows:
+            return {"updated": 0, "message": "No articles need re-categorization"}
+
+        updated = 0
+        from database import _pool as pool_ref
+        conn = pool_ref.getconn()
+        try:
+            with conn.cursor() as cur:
+                for row in rows:
+                    cat = _detect_category(str(row.get("title", "")), str(row.get("summary", "")))
+                    if cat != "Latest":
+                        cur.execute(
+                            "UPDATE articles SET category = %s WHERE id = %s::uuid",
+                            (cat, str(row["id"]))
+                        )
+                        updated += 1
+                conn.commit()
+        finally:
+            pool_ref.putconn(conn)
+
+        logger.info(f"Re-categorized {updated} articles")
+        return {"updated": updated, "total_checked": len(rows)}
+    except Exception as e:
+        logger.error(f"Recategorize error: {e}")
+        raise HTTPException(500, str(e))
 def fix_article_images():
     """Update all articles with varied images from the pool using a single bulk SQL statement."""
     try:

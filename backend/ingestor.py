@@ -44,17 +44,69 @@ except Exception:
 
 # ─── Category detection ───────────────────────────────────────────────────────
 CATEGORY_KEYWORDS = {
-    "AI Models": ["gpt", "llm", "model", "transformer", "claude", "gemini", "mistral", "llama", "benchmark"],
-    "AI Tools": ["tool", "plugin", "api", "sdk", "platform", "app", "software", "copilot", "assistant"],
-    "AI Startups": ["startup", "founded", "raises", "series a", "seed round", "company", "team"],
-    "Funding News": ["funding", "investment", "raise", "million", "billion", "valuation", "vc"],
-    "Product Launches": ["launch", "release", "announce", "update", "version", "new feature", "ships"],
-    "Big Tech AI": ["google", "microsoft", "apple", "meta", "amazon", "openai", "anthropic", "deepmind"],
-    "Open Source AI": ["open source", "open-source", "github", "hugging face", "community", "free model"],
-    "AI Research": ["research", "paper", "study", "findings", "arxiv", "algorithm", "academic"],
+    "AI Models": [
+        "gpt", "llm", "large language model", "transformer", "claude", "gemini", "mistral",
+        "llama", "benchmark", "weights", "parameter", "fine-tun", "pre-train", "multimodal",
+        "diffusion model", "vision model", "language model", "neural network", "grok", "o1", "o3",
+        "deepseek", "qwen", "phi-", "falcon", "cohere", "inflection", "perplexity",
+    ],
+    "AI Tools": [
+        "tool", "plugin", "api", "sdk", "platform", "app", "software", "copilot", "assistant",
+        "agent", "chatbot", "workflow", "automation", "integration", "extension", "interface",
+        "productivity", "nocode", "no-code", "low-code", "saas", "product hunt",
+    ],
+    "AI Startups": [
+        "startup", "founded", "raises", "series a", "series b", "series c", "seed round",
+        "company", "team", "co-founder", "entrepreneur", "venture", "spinoff", "spin-off",
+        "y combinator", "ycombinator",
+    ],
+    "Funding News": [
+        "funding", "investment", "raise", "raised", "million", "billion", "valuation", "vc",
+        "venture capital", "angel", "round", "backed", "secures", "closes round",
+    ],
+    "Product Launches": [
+        "launch", "launches", "release", "releases", "released", "announce", "announced",
+        "update", "ships", "now available", "introducing", "new feature", "v2", "v3",
+        "open beta", "general availability", "ga release", "rolls out",
+    ],
+    "Big Tech AI": [
+        "google", "microsoft", "apple", "meta", "amazon", "openai", "anthropic", "deepmind",
+        "nvidia", "huawei", "samsung", "ibm", "salesforce", "adobe", "intel", "amd",
+        "tesla", "bytedance", "baidu", "alibaba", "tencent", "xai",
+    ],
+    "Open Source AI": [
+        "open source", "open-source", "github", "hugging face", "community", "free model",
+        "mit license", "apache license", "open weights", "open model", "ollama",
+        "self-host", "self hosted", "local model",
+    ],
+    "AI Research": [
+        "research", "paper", "study", "findings", "arxiv", "algorithm", "academic",
+        "university", "lab", "scientist", "experiment", "dataset", "benchmark", "evaluation",
+        "published", "conference", "neurips", "icml", "iclr", "cvpr",
+    ],
 }
 
-DEFAULT_CATEGORY = "AI Tools"
+# Keywords that indicate an article is AI-related (used to filter non-AI content)
+AI_RELEVANCE_KEYWORDS = [
+    "ai", "artificial intelligence", "machine learning", "deep learning",
+    "neural", "llm", "gpt", "chatgpt", "chatbot", "openai", "anthropic", "gemini",
+    "claude", "mistral", "llama", "model", "automation", "robot", "algorithm",
+    "data science", "nlp", "computer vision", "generative", "diffusion",
+    "reinforcement learning", "transformer", "language model", "copilot",
+    "nvidia", "deepmind", "hugging face", "agent", "rag",
+]
+
+
+DEFAULT_CATEGORY = "Latest"
+
+
+
+def _is_ai_relevant(title: str, content: str) -> bool:
+    """Quick check: does this article have any AI-related content?
+    Filters out non-AI articles from general tech sources.
+    """
+    text = f"{title} {content[:500]}".lower()
+    return any(kw in text for kw in AI_RELEVANCE_KEYWORDS)
 
 # ─── Image pool ───────────────────────────────────────────────────────────────
 IMAGE_POOL = [
@@ -219,6 +271,11 @@ def ingest_source(source: dict, dry_run: bool = False) -> list:
 
             title = entry.get("title", "Untitled").strip()
             content = entry.get("summary", "") or entry.get("description", "") or ""
+
+            # Skip non-AI articles from general tech sources (e.g. ZDNet, FT)
+            # Sources with category_hint are trusted to be AI-focused
+            if not source.get("category_hint") and not _is_ai_relevant(title, content):
+                continue
 
             # Parse publish date
             published = entry.get("published_parsed") or entry.get("updated_parsed")
