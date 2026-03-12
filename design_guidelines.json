@@ -1,0 +1,140 @@
+{
+  "identity": {
+    "name": "E1",
+    "mission": "Create a top 1% premium AI news app with anti-standard design patterns.",
+    "principles": [
+      "Fusion over Imitation: Mix swiss grid precision with cyberpunk atmosphere.",
+      "Emotion First: The app should feel 'fast' and 'intelligent'.",
+      "Content is King: The news card is the hero. Everything else fades away.",
+      "Dark Mode Only: Embrace the void. Deepest blacks, glowing accents."
+    ]
+  },
+  "platform_constraints": {
+    "framework": "React Native Expo",
+    "styling": "StyleSheet.create() only. NO CSS files. NO className strings.",
+    "navigation": "expo-router (File-based routing)",
+    "icons": "Lucide React Native (lucide-react-native) or Expo Vector Icons",
+    "animations": "react-native-reanimated (SharedValues, withSpring, withTiming)",
+    "gestures": "react-native-gesture-handler",
+    "safe_area": "react-native-safe-area-context",
+    "gradients": "expo-linear-gradient",
+    "blur": "expo-blur"
+  },
+  "theme": {
+    "colors": {
+      "background": "#020617",
+      "surface": "#0F172A",
+      "surface_highlight": "#1E293B",
+      "primary": "#3B82F6",
+      "primary_glow": "rgba(59, 130, 246, 0.5)",
+      "secondary": "#8B5CF6",
+      "accent": "#F43F5E",
+      "text_primary": "#F8FAFC",
+      "text_secondary": "#94A3B8",
+      "text_tertiary": "#64748B",
+      "border": "#1E293B",
+      "success": "#10B981",
+      "overlay_gradient_start": "transparent",
+      "overlay_gradient_end": "#020617"
+    },
+    "typography": {
+      "font_family_heading": "System (Weight: 800/Heavy)",
+      "font_family_body": "System (Weight: 400/Regular)",
+      "font_family_mono": "System (Courier/Menlo for tags)",
+      "sizes": {
+        "xs": 12,
+        "sm": 14,
+        "base": 16,
+        "lg": 18,
+        "xl": 24,
+        "2xl": 32,
+        "3xl": 48
+      },
+      "line_heights": {
+        "tight": 1.1,
+        "normal": 1.5,
+        "relaxed": 1.7
+      }
+    },
+    "spacing": {
+      "xs": 4,
+      "sm": 8,
+      "md": 16,
+      "lg": 24,
+      "xl": 32,
+      "2xl": 48,
+      "3xl": 64
+    },
+    "radius": {
+      "sm": 8,
+      "md": 12,
+      "lg": 24,
+      "xl": 32,
+      "full": 9999
+    }
+  },
+  "layout_strategies": {
+    "vertical_swipe_feed": {
+      "description": "The core experience. Full screen news cards that snap vertically.",
+      "implementation": "Use `react-native-pager-view` with `orientation='vertical'` for native performance. Wrap content in Reanimated views for entrance animations.",
+      "styles": {
+        "container": "flex: 1, backgroundColor: '#000'",
+        "page": "width: '100%', height: '100%', justifyContent: 'flex-end'"
+      }
+    },
+    "bento_grid_mobile": {
+      "description": "For Categories/Discover screen. A dense grid of tappable areas.",
+      "implementation": "Flexbox with wrap. Items have `width: '48%'` and `marginBottom: 16`.",
+      "styles": {
+        "container": "flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', padding: 16"
+      }
+    }
+  },
+  "components": {
+    "NewsCard": {
+      "path": "/components/NewsCard.js",
+      "specs": "Full screen height. Image takes top 50%. Gradient overlay from bottom up. Text sits on bottom 50%.",
+      "interactions": "Double tap to bookmark (heart animation). Long press to share."
+    },
+    "Button": {
+      "path": "/components/Button.js",
+      "specs": "TouchableOpacity with Reanimated scale on press. LinearGradient background for primary actions.",
+      "variants": ["primary", "ghost", "outline"]
+    },
+    "TabBar": {
+      "path": "/components/TabBar.js",
+      "specs": "Floating glass bar at bottom. `BlurView` with tint='dark'. Icons only, no labels for minimalism."
+    },
+    "Header": {
+      "path": "/components/Header.js",
+      "specs": "Absolute positioned top bar. Transparent background. Logo left, Settings right."
+    }
+  },
+  "assets": {
+    "images": {
+      "hero_ai_blue": "https://images.unsplash.com/photo-1664639985362-7eb8309f9e94?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODh8MHwxfHNlYXJjaHwxfHxmdXR1cmlzdGljJTIwYXJ0aWZpY2lhbCUyMGludGVsbGlnZW5jZSUyMG5ldXJhbCUyMG5ldHdvcmslMjBkYXJrJTIwYmx1ZSUyMGdsb3d8ZW58MHx8fHwxNzczMzA1OTkxfDA&ixlib=rb-4.1.0&q=85",
+      "cyberpunk_city": "https://images.unsplash.com/photo-1728330458318-70438beffc44?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTV8MHwxfHNlYXJjaHwxfHxjeWJlcnB1bmslMjBjaXR5JTIwbmlnaHQlMjBuZW9uJTIwbGlnaHRzfGVufDB8fHx8MTc3MzMwNTk5Mnww&ixlib=rb-4.1.0&q=85",
+      "data_center": "https://images.unsplash.com/photo-1614508569207-3295ac89d75f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHwxfHxkYXRhJTIwY2VudGVyJTIwc2VydmVyJTIwcm9vbSUyMGRhcmslMjBnbG93aW5nJTIwbGlnaHRzfGVufDB8fHx8MTc3MzMwNTk5M3ww&ixlib=rb-4.1.0&q=85",
+      "abstract_mesh": "https://images.unsplash.com/photo-1695902173528-0b15104c4554?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODh8MHwxfHNlYXJjaHwyfHxmdXR1cmlzdGljJTIwYXJ0aWZpY2lhbCUyMGludGVsbGlnZW5jZSUyMG5ldXJhbCUyMG5ldHdvcmslMjBkYXJrJTIwYmx1ZSUyMGdsb3d8ZW58MHx8fHwxNzczMzA1OTkxfDA&ixlib=rb-4.1.0&q=85"
+    },
+    "icons_usage": "Use Lucide React Native. Stroke width 1.5px for elegance. Size 24px standard."
+  },
+  "instructions_to_main_agent": [
+    "1. Initialize Expo project structure if not present (app/, components/, constants/).",
+    "2. Install critical dependencies: `expo-router`, `react-native-reanimated`, `react-native-gesture-handler`, `expo-linear-gradient`, `expo-blur`, `lucide-react-native`, `react-native-pager-view`.",
+    "3. Implement the `ThemeContext` or `constants/Colors.js` first.",
+    "4. Build the `NewsCard` component with `ImageBackground` and `LinearGradient` overlay.",
+    "5. Build the `VerticalFeed` using `PagerView`.",
+    "6. Ensure `SafeAreaView` is used correctly so content doesn't clip behind notch.",
+    "7. Mock data should include: id, title, summary, imageUrl, source, time, category.",
+    "8. Add `data-testid` to all TouchableOpacity elements."
+  ],
+  "universal_guidelines": [
+    "Avoid generic 'flat' design. Use subtle borders (width: 0.5, color: rgba(255,255,255,0.1)) to define edges in the dark.",
+    "Typography: Use `letterSpacing` for headings (tight: -0.5) and tags (wide: 1.0).",
+    "Motion: Every press must have feedback (opacity dip or scale down).",
+    "No loading spinners. Use skeleton loaders with shimmering gradients.",
+    "Contrast: Ensure text on images has a strong gradient scrim behind it.",
+    "NEVER use `alert()` for errors. Use a custom toast or snackbar overlay."
+  ]
+}
