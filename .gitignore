@@ -83,7 +83,8 @@ agenthub/agents/youtube/db
 # Cache
 # ===============================
 .cache/
-
+frontend/.metro-cache/
+.metro-cache/
 # ===============================
 # Mobile development
 # ===============================
