@@ -102,3 +102,5 @@ android-sdk/
 # ===============================
 *token.json*
 *credentials.js
+frontend/.metro-cache/
+frontend/.metro-cache/

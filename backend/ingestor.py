@@ -43,47 +43,56 @@ except Exception:
     _openai_client = None
 
 # ─── Category detection ───────────────────────────────────────────────────────
-CATEGORY_KEYWORDS = {
-    "AI Models": [
-        "gpt", "llm", "large language model", "transformer", "claude", "gemini", "mistral",
-        "llama", "benchmark", "weights", "parameter", "fine-tun", "pre-train", "multimodal",
-        "diffusion model", "vision model", "language model", "neural network", "grok", "o1", "o3",
-        "deepseek", "qwen", "phi-", "falcon", "cohere", "inflection", "perplexity",
-    ],
-    "AI Tools": [
-        "tool", "plugin", "api", "sdk", "platform", "app", "software", "copilot", "assistant",
-        "agent", "chatbot", "workflow", "automation", "integration", "extension", "interface",
-        "productivity", "nocode", "no-code", "low-code", "saas", "product hunt",
-    ],
-    "AI Startups": [
-        "startup", "founded", "raises", "series a", "series b", "series c", "seed round",
-        "company", "team", "co-founder", "entrepreneur", "venture", "spinoff", "spin-off",
-        "y combinator", "ycombinator",
-    ],
-    "Funding News": [
-        "funding", "investment", "raise", "raised", "million", "billion", "valuation", "vc",
-        "venture capital", "angel", "round", "backed", "secures", "closes round",
-    ],
-    "Product Launches": [
-        "launch", "launches", "release", "releases", "released", "announce", "announced",
-        "update", "ships", "now available", "introducing", "new feature", "v2", "v3",
-        "open beta", "general availability", "ga release", "rolls out",
-    ],
-    "Big Tech AI": [
-        "google", "microsoft", "apple", "meta", "amazon", "openai", "anthropic", "deepmind",
-        "nvidia", "huawei", "samsung", "ibm", "salesforce", "adobe", "intel", "amd",
-        "tesla", "bytedance", "baidu", "alibaba", "tencent", "xai",
-    ],
-    "Open Source AI": [
-        "open source", "open-source", "github", "hugging face", "community", "free model",
-        "mit license", "apache license", "open weights", "open model", "ollama",
-        "self-host", "self hosted", "local model",
-    ],
-    "AI Research": [
-        "research", "paper", "study", "findings", "arxiv", "algorithm", "academic",
-        "university", "lab", "scientist", "experiment", "dataset", "benchmark", "evaluation",
-        "published", "conference", "neurips", "icml", "iclr", "cvpr",
-    ],
+# ─── Category strict rules ───────────────────────────────────────────────────────
+CATEGORY_RULES = {
+    "AI Models": {
+        "required": ["gpt-4", "gpt-5", "claude 3", "gemini 1.5", "llama 3", "mistral", "open-source model", "frontier model", "large language model", "llm", "o1", "o3", "deepseek", "qwen", "phi-3", "parameters", "benchmark", "weights"],
+        "bonus": ["architecture", "inference", "training", "multi-modal", "capability"],
+        "penalty": ["powered by", "integration", "app", "raises", "funding", "feature", "launches new feature", "startup", "platform", "tutorial", "how to", "api", "setup", "install", "guide", "researchers", "study", "framework", "paper", "arxiv", "applied", "infrastructure", "reading list", "developer", "usage", "safety", "privacy", "embeddings", "clustering", "unmask", "pseudonymous", "scikit-learn", "beginner", "implementation", "how-to"],
+        "threshold": 3.0
+    },
+    "Product Launches": {
+        "required": ["launches", "introduces", "rolls out", "new feature", "announces", "now available", "powered by", "integration", "gets ai", "adds ai"],
+        "bonus": ["copilot", "maps", "office", "firefly", "adobe", "workspace"],
+        "penalty": ["arxiv", "paper", "raises", "funding", "seed round"],
+        "threshold": 3.0
+    },
+    "AI Research": {
+        "required": ["arxiv", "paper", "researchers", "study", "findings", "new method", "state-of-the-art", "sota", "framework", "academic", "university", "evaluation", "breakthrough"],
+        "bonus": ["dataset", "algorithm", "mit", "stanford"],
+        "penalty": ["launches", "startup", "funding", "raises", "app", "product", "series a"],
+        "threshold": 3.0
+    },
+    "Funding News": {
+        "required": ["raises", "funding", "seed round", "series a", "series b", "series c", "valuation", "backed by", "venture capital", "vc", "acquires", "acquisition", "investment"],
+        "bonus": ["million", "billion", "investors", "round"],
+        "penalty": ["arxiv", "paper", "feature", "upgrade"],
+        "threshold": 3.0
+    },
+    "Big Tech AI": {
+        "required": ["openai", "google", "meta", "microsoft", "amazon", "apple", "anthropic", "nvidia", "xai", "deepmind"],
+        "bonus": ["strategy", "partnership", "ecosystem", "ceo", "announces"],
+        "penalty": ["seed round", "startup", "indie", "arxiv"],
+        "threshold": 3.0
+    },
+    "Open Source AI": {
+        "required": ["open source", "open-source", "hugging face", "open model", "open weights", "github", "ollama", "local model"],
+        "bonus": ["mit license", "apache", "community"],
+        "penalty": ["closed source", "proprietary"],
+        "threshold": 3.0
+    },
+    "AI Tools": {
+        "required": ["tool", "saas", "workflow", "agent", "automation", "platform", "app", "copilot", "plugin", "extension", "productivity"],
+        "bonus": ["no-code", "low-code", "interface", "generate"],
+        "penalty": ["funding", "raises", "arxiv", "parameter", "weights", "architecture", "benchmark"],
+        "threshold": 3.0
+    },
+    "AI Startups": {
+        "required": ["startup", "founder", "entrepreneur", "stealth", "y combinator", "incubator"],
+        "bonus": ["vision", "company", "team"],
+        "penalty": ["google", "microsoft", "meta", "amazon", "apple", "arxiv"],
+        "threshold": 2.5
+    }
 }
 
 # Keywords that indicate an article is AI-related (used to filter non-AI content)
@@ -101,12 +110,10 @@ DEFAULT_CATEGORY = "Latest"
 
 
 
-def _is_ai_relevant(title: str, content: str) -> bool:
-    """Quick check: does this article have any AI-related content?
-    Filters out non-AI articles from general tech sources.
-    """
-    text = f"{title} {content[:500]}".lower()
-    return any(kw in text for kw in AI_RELEVANCE_KEYWORDS)
+def _calculate_ai_relevance(title: str, text: str) -> float:
+    text_combined = f"{title.lower()} {text.lower()}"
+    score = sum(text_combined.count(kw) for kw in AI_RELEVANCE_KEYWORDS)
+    return score
 
 # ─── Image pool ───────────────────────────────────────────────────────────────
 IMAGE_POOL = [
@@ -155,12 +162,45 @@ def _get_source_url(feed_url: str) -> str:
         return feed_url
 
 
-def _detect_category(title: str, text: str) -> str:
-    combined = f"{title} {text}".lower()
-    for cat, keywords in CATEGORY_KEYWORDS.items():
-        if any(kw in combined for kw in keywords):
-            return cat
-    return DEFAULT_CATEGORY
+def _detect_category_strict(title: str, text: str) -> tuple[str, float]:
+    title_lower = title.lower()
+    text_lower = text.lower()
+    
+    best_cat = DEFAULT_CATEGORY
+    max_score = 0.0
+    scores = {}
+    
+    for cat, rules in CATEGORY_RULES.items():
+        score = 0.0
+        
+        for req in rules.get("required", []):
+            count_title = title_lower.count(req)
+            count_text = text_lower.count(req)
+            score += (count_title * 3.0) + (count_text * 1.0)
+            
+        for bon in rules.get("bonus", []):
+            count_title = title_lower.count(bon)
+            count_text = text_lower.count(bon)
+            score += (count_title * 1.5) + (count_text * 0.5)
+            
+        for pen in rules.get("penalty", []):
+            count_title = title_lower.count(pen)
+            count_text = text_lower.count(pen)
+            score -= (count_title * 5.0) + (count_text * 2.0)
+            
+        # Give a substantial boost to AI Models if a frontier lab releases it
+        if cat == "AI Models" and any(lab in title_lower for lab in ["openai", "anthropic", "meta", "google", "deepmind", "xai"]):
+            if any(req in title_lower for req in rules.get("required", [])):
+                score += 5.0 # Frontier model release override boost
+
+        if score >= rules.get("threshold", 2.0):
+            scores[cat] = score
+            
+    if scores:
+        best_cat = max(scores.items(), key=lambda x: x[1])[0]
+        max_score = scores[best_cat]
+        
+    return best_cat, max_score
 
 
 def _generate_summary(title: str, content: str) -> str:
@@ -274,7 +314,8 @@ def ingest_source(source: dict, dry_run: bool = False) -> list:
 
             # Skip non-AI articles from general tech sources (e.g. ZDNet, FT)
             # Sources with category_hint are trusted to be AI-focused
-            if not source.get("category_hint") and not _is_ai_relevant(title, content):
+            relevance_score = _calculate_ai_relevance(title, content)
+            if not source.get("category_hint") and relevance_score < 1.0:
                 continue
 
             # Parse publish date
@@ -288,7 +329,10 @@ def ingest_source(source: dict, dry_run: bool = False) -> list:
                 pub_dt = datetime.now(timezone.utc)
 
             summary = _generate_summary(title, content)
-            category = source.get("category_hint") or _detect_category(title, summary)
+            
+            # Predict category logic
+            strict_cat, conf_score = _detect_category_strict(title, summary)
+            category = source.get("category_hint") or strict_cat
 
             # Assign ID first so we can use it in _pick_image fallback
             new_id = str(uuid.uuid4())
@@ -309,12 +353,13 @@ def ingest_source(source: dict, dry_run: bool = False) -> list:
                 """
                 INSERT INTO articles (
                     id, title, summary, image_url, source_name, source_url, article_url,
-                    category, published_at, status, is_breaking, notification_sent
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'published', false, false)
+                    category, published_at, status, is_breaking, notification_sent,
+                    ai_relevance_score, category_confidence_score, original_category
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'published', false, false, %s, %s, %s)
                 ON CONFLICT DO NOTHING
                 """,
                 (new_id, title, summary, image_url, source["name"], source_url,
-                 article_url, category, pub_dt),
+                 article_url, category, pub_dt, relevance_score, conf_score, strict_cat),
             )
             new_ids.append(new_id)
             logger.info(f"Added [{category}] {source['name']}: {title[:55]}")

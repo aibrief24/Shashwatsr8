@@ -268,10 +268,19 @@ def get_articles(category: Optional[str] = None, limit: int = 50, offset: int = 
         total_rows = query("SELECT count(*) as cnt FROM articles WHERE status = 'published' AND category = %s", (category,))
     else:
         rows = query(
-            "SELECT * FROM articles WHERE status = 'published' ORDER BY published_at DESC LIMIT %s OFFSET %s",
+            "SELECT * FROM articles WHERE status = 'published' AND published_at >= NOW() - INTERVAL '2 days' ORDER BY published_at DESC LIMIT %s OFFSET %s",
             (limit, offset)
         )
-        total_rows = query("SELECT count(*) as cnt FROM articles WHERE status = 'published'")
+        total_rows = query("SELECT count(*) as cnt FROM articles WHERE status = 'published' AND published_at >= NOW() - INTERVAL '2 days'")
+        
+        # Fallback if there are barely any articles in the 48 hour window
+        if (not rows or len(rows) < limit) and offset == 0:
+            rows = query(
+                "SELECT * FROM articles WHERE status = 'published' AND published_at >= NOW() - INTERVAL '7 days' ORDER BY published_at DESC LIMIT %s OFFSET %s",
+                (limit, offset)
+            )
+            total_rows = query("SELECT count(*) as cnt FROM articles WHERE status = 'published' AND published_at >= NOW() - INTERVAL '7 days'")
+            
     total = total_rows[0]["cnt"] if total_rows else 0
     return {"articles": _serialize_list(rows or []), "total": total}
 
@@ -453,7 +462,7 @@ def recategorize_articles():
     """Re-categorize all 'Latest' articles using the improved keyword set."""
     try:
         from ingestor import _detect_category
-        rows = query("SELECT id, title, summary FROM articles WHERE category = 'Latest' OR category IS NULL")
+        rows = query("SELECT id, title, summary FROM articles")
         if not rows:
             return {"updated": 0, "message": "No articles need re-categorization"}
 
