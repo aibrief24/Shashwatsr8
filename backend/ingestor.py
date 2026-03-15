@@ -105,6 +105,14 @@ AI_RELEVANCE_KEYWORDS = [
     "nvidia", "deepmind", "hugging face", "agent", "rag",
 ]
 
+# Hard blocklist for generic consumer tech / non-AI news
+FORBIDDEN_KEYWORDS = [
+    "tv", "tvs", "review", "password manager", "smartphone", "laptop", "gaming", "router", 
+    "deal", "deals", "black friday", "cyber monday", "best buy", "amazon prime", "headphone",
+    "earbuds", "watch", "smartwatch", "console", "nintendo", "playstation", "xbox",
+    "processor review", "motherboard", "mouse", "keyboard", "monitor"
+]
+
 
 DEFAULT_CATEGORY = "Latest"
 
@@ -112,6 +120,12 @@ DEFAULT_CATEGORY = "Latest"
 
 def _calculate_ai_relevance(title: str, text: str) -> float:
     text_combined = f"{title.lower()} {text.lower()}"
+    
+    # If a forbidden consumer tech word is present, nuke the score so it's rejected
+    for kw in FORBIDDEN_KEYWORDS:
+        if f" {kw} " in text_combined or text_combined.startswith(f"{kw} ") or text_combined.endswith(f" {kw}"):
+            return -100.0
+            
     score = sum(text_combined.count(kw) for kw in AI_RELEVANCE_KEYWORDS)
     return score
 
@@ -289,18 +303,20 @@ def _fetch_og_image(article_url: str) -> str | None:
     return None
 
 
-def ingest_source(source: dict, dry_run: bool = False) -> list:
+def ingest_source(source: dict, dry_run: bool = False) -> dict:
     """Ingest articles from a single RSS source.
-    Returns list of newly inserted article IDs.
+    Returns metrics dict.
     """
-    new_ids = []
+    metrics = {"new_ids": [], "rejected_non_ai": 0, "skipped_as_tutorial": 0, "errors": 0, "feed_error": False}
     source_url = _get_source_url(source["url"])
 
     try:
+        # Check if the feed is even valid RSS/XML
         feed = feedparser.parse(source["url"], request_headers={"User-Agent": "AIBrief24/1.0"})
         if feed.bozo and not feed.entries:
-            logger.warning(f"Bad feed from {source['name']}: {feed.bozo_exception}")
-            return new_ids
+            logger.warning(f"Invalid or malformed feed from {source['name']}: {feed.bozo_exception}")
+            metrics["feed_error"] = True
+            return metrics
 
         for entry in feed.entries[:15]:  # Max 15 per source
             article_url = entry.get("link", "").strip()
@@ -312,10 +328,32 @@ def ingest_source(source: dict, dry_run: bool = False) -> list:
             title = entry.get("title", "Untitled").strip()
             content = entry.get("summary", "") or entry.get("description", "") or ""
 
-            # Skip non-AI articles from general tech sources (e.g. ZDNet, FT)
-            # Sources with category_hint are trusted to be AI-focused
+            # Check AI Relevance and apply mixed-source strictness
             relevance_score = _calculate_ai_relevance(title, content)
-            if not source.get("category_hint") and relevance_score < 1.0:
+            
+            # If it's a generic tech source (no category_hint), demand strong AI signal (>= 2 hits)
+            if not source.get("category_hint") and relevance_score < 2.0:
+                metrics["rejected_non_ai"] += 1
+                continue
+                
+            # Even for AI sources, it must have at least *some* AI context 
+            if source.get("category_hint") and relevance_score <= 0.0:
+                metrics["rejected_non_ai"] += 1
+                continue
+
+            # Check for pure tutorials in the Latest queue
+            combined_text = f"{title.lower()} {content.lower()}"
+            tutorial_keywords = ["tutorial", "how to", "guide", "beginner's guide", "step-by-step"]
+            is_tutorial = any(kw in combined_text for kw in tutorial_keywords)
+
+            # Predict category logic
+            summary = _generate_summary(title, content)
+            strict_cat, conf_score = _detect_category_strict(title, summary)
+            category = source.get("category_hint") or strict_cat
+            
+            # Block tutorials from crowding the Latest feed
+            if is_tutorial and category == "Latest":
+                metrics["skipped_as_tutorial"] += 1
                 continue
 
             # Parse publish date
@@ -327,12 +365,6 @@ def ingest_source(source: dict, dry_run: bool = False) -> list:
                     pub_dt = datetime.now(timezone.utc)
             else:
                 pub_dt = datetime.now(timezone.utc)
-
-            summary = _generate_summary(title, content)
-            
-            # Predict category logic
-            strict_cat, conf_score = _detect_category_strict(title, summary)
-            category = source.get("category_hint") or strict_cat
 
             # Assign ID first so we can use it in _pick_image fallback
             new_id = str(uuid.uuid4())
@@ -346,7 +378,7 @@ def ingest_source(source: dict, dry_run: bool = False) -> list:
 
             if dry_run:
                 logger.info(f"[DRY RUN] Would add: {title[:60]}")
-                new_ids.append(new_id)
+                metrics["new_ids"].append(new_id)
                 continue
 
             execute(
@@ -361,13 +393,14 @@ def ingest_source(source: dict, dry_run: bool = False) -> list:
                 (new_id, title, summary, image_url, source["name"], source_url,
                  article_url, category, pub_dt, relevance_score, conf_score, strict_cat),
             )
-            new_ids.append(new_id)
+            metrics["new_ids"].append(new_id)
             logger.info(f"Added [{category}] {source['name']}: {title[:55]}")
 
     except Exception as e:
         logger.error(f"Error ingesting {source.get('name', 'unknown')}: {e}")
+        metrics["errors"] += 1
 
-    return new_ids
+    return metrics
 
 
 def run_ingestion(dry_run: bool = False) -> dict:
@@ -386,16 +419,40 @@ def run_ingestion(dry_run: bool = False) -> dict:
 
     all_new_ids = []
     results = []
+    metrics = {
+        "skipped_feeds": 0,
+        "rejected_non_ai": 0,
+        "skipped_as_tutorial": 0,
+        "inserted_articles": 0,
+    }
+    
     for source in sources:
-        new_ids = ingest_source(source, dry_run=dry_run)
+        source_metrics = ingest_source(source, dry_run=dry_run)
+        
+        if source_metrics["feed_error"]:
+            metrics["skipped_feeds"] += 1
+            
+        metrics["rejected_non_ai"] += source_metrics["rejected_non_ai"]
+        metrics["skipped_as_tutorial"] += source_metrics["skipped_as_tutorial"]
+        
+        new_ids = source_metrics["new_ids"]
         if new_ids:
             all_new_ids.extend(new_ids)
-            results.append({"source": source["name"], "new_articles": len(new_ids)})
+            metrics["inserted_articles"] += len(new_ids)
+            
+        results.append({
+            "source": source["name"], 
+            "new_articles": len(new_ids),
+            "rejected_non_ai": source_metrics["rejected_non_ai"],
+            "skipped_as_tutorial": source_metrics["skipped_as_tutorial"],
+            "feed_error": source_metrics["feed_error"]
+        })
 
     logger.info(f"Ingestion complete: {len(all_new_ids)} new articles from {len(sources)} sources")
     return {
         "status": "done",
         "total": len(all_new_ids),
+        "metrics": metrics,
         "sources_processed": len(sources),
         "results": results,
         "new_article_ids": all_new_ids,
@@ -408,9 +465,17 @@ if __name__ == "__main__":
     print(f"{'[DRY RUN] ' if dry else ''}Starting AIBrief24 content ingestion...")
     result = run_ingestion(dry_run=dry)
     print(f"\nResult: {result['status']}")
-    print(f"Total new articles: {result['total']}")
-    print(f"Sources processed: {result.get('sources_processed', 0)}")
+    print(f"Total inserted: {result['total']}")
+    
+    if 'metrics' in result:
+        print(f"\nValidation Metrics:")
+        print(f" - Feeds skipped (malformed/errors): {result['metrics']['skipped_feeds']}")
+        print(f" - Articles rejected (non-AI/low score): {result['metrics']['rejected_non_ai']}")
+        print(f" - Tutorials excluded from Latest: {result['metrics']['skipped_as_tutorial']}")
+        
+    print(f"\nSources processed: {result.get('sources_processed', 0)}")
     if result.get("results"):
-        print("\nBreakdown:")
+        print("\nBreakdown (per source):")
         for r in result["results"]:
-            print(f"  {r['source']}: {r['new_articles']} new articles")
+            err_tag = "[ERROR] " if r["feed_error"] else ""
+            print(f"  {err_tag}{r['source']}: {r['new_articles']} inserted | {r['rejected_non_ai']} rejected | {r['skipped_as_tutorial']} skipped tutorials")

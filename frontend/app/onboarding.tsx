@@ -48,8 +48,11 @@ export default function OnboardingScreen() {
 
       {/* Content */}
       <View style={styles.slideArea}>
-        <View style={[styles.iconWrap, { backgroundColor: currentSlide.color + '25', borderColor: currentSlide.color + '40' }]}>
-          <Icon size={48} color={currentSlide.color} strokeWidth={1.5} />
+        <View style={styles.iconWrapOuter}>
+          <LinearGradient colors={[currentSlide.color + '30', 'transparent']} style={StyleSheet.absoluteFillObject} />
+          <View style={[styles.iconWrap, { borderColor: currentSlide.color + '40' }]}>
+            <Icon size={56} color={currentSlide.color} strokeWidth={1.5} />
+          </View>
         </View>
         <Text style={styles.slideTitle}>{currentSlide.title}</Text>
         <Text style={styles.slideDesc}>{currentSlide.desc}</Text>
@@ -79,18 +82,21 @@ const styles = StyleSheet.create({
   spacer: { flex: 1 },
   skipBtn: { paddingVertical: 8, paddingHorizontal: 4 },
   skipText: { color: Colors.textSecondary, fontSize: FontSize.base },
-  slideArea: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
-  iconWrap: {
-    width: 100, height: 100, borderRadius: 30,
-    justifyContent: 'center', alignItems: 'center', marginBottom: 32,
-    borderWidth: 1,
+  slideArea: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+  iconWrapOuter: {
+    width: 140, height: 140, borderRadius: 70,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 40,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', backgroundColor: Colors.surface,
+    overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.5, shadowRadius: 30, elevation: 10,
   },
-  slideTitle: { fontSize: 26, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', marginBottom: 16, letterSpacing: -0.5 },
-  slideDesc: { fontSize: 16, color: '#94A3B8', textAlign: 'center', lineHeight: 24 },
-  bottomSection: { paddingBottom: Platform.OS === 'ios' ? 50 : 30, paddingHorizontal: 24, alignItems: 'center' },
-  dots: { flexDirection: 'row', marginBottom: 24 },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.surfaceHighlight, marginHorizontal: 4 },
-  dotActive: { width: 24, backgroundColor: Colors.primary },
-  nextBtnGrad: { height: 56, borderRadius: Radius.md, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 100 },
-  nextBtnText: { fontSize: FontSize.lg, fontWeight: '700', color: '#FFFFFF' },
+  iconWrap: { width: 100, height: 100, borderRadius: 50, justifyContent: 'center', alignItems: 'center', borderWidth: 1, backgroundColor: Colors.background },
+  slideTitle: { fontSize: 30, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', marginBottom: 16, letterSpacing: -0.5, lineHeight: 36 },
+  slideDesc: { fontSize: 16, color: '#94A3B8', textAlign: 'center', lineHeight: 24, paddingHorizontal: 12 },
+  bottomSection: { paddingBottom: Platform.OS === 'ios' ? 60 : 40, paddingHorizontal: 32, alignItems: 'center' },
+  dots: { flexDirection: 'row', marginBottom: 32 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.surfaceHighlight, marginHorizontal: 4 },
+  dotActive: { width: 20, backgroundColor: Colors.primary },
+  nextBtnGrad: { height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 100, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 15, elevation: 6 },
+  nextBtnText: { fontSize: 17, fontWeight: '700', color: '#FFFFFF', letterSpacing: 0.5 },
 });

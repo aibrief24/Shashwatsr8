@@ -26,7 +26,7 @@ export default function BookmarksScreen() {
     try {
       const res = await api.getBookmarks(token);
       setArticles(res.bookmarks || []);
-    } catch {} finally { setLoading(false); }
+    } catch { } finally { setLoading(false); }
   }, [token]);
 
   useEffect(() => { loadBookmarks(); }, [bookmarkIds]);
@@ -39,7 +39,7 @@ export default function BookmarksScreen() {
   return (
     <View testID="bookmarks-screen" style={[styles.container, { paddingTop: insets.top }]}>
       <Text style={styles.pageTitle}>Saved Articles</Text>
-      <Text style={styles.pageSubtitle}>{articles.length} bookmarked</Text>
+      <Text style={styles.pageSubtitle}>{articles.length} bookmarked for later</Text>
       <FlatList
         data={articles}
         keyExtractor={item => item.id}
@@ -76,23 +76,23 @@ export default function BookmarksScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  pageTitle: { fontSize: FontSize.xl, fontWeight: '800', color: Colors.textPrimary, paddingHorizontal: 16, marginTop: 16, letterSpacing: -0.5 },
-  pageSubtitle: { fontSize: FontSize.sm, color: Colors.textSecondary, paddingHorizontal: 16, marginTop: 4, marginBottom: 16 },
-  list: { paddingHorizontal: 16, paddingBottom: 100 },
+  pageTitle: { fontSize: 32, fontWeight: '800', color: Colors.textPrimary, paddingHorizontal: 20, marginTop: 24, letterSpacing: -1 },
+  pageSubtitle: { fontSize: 16, color: Colors.textSecondary, paddingHorizontal: 20, marginTop: 4, marginBottom: 32 },
+  list: { paddingHorizontal: 20, paddingBottom: 120 },
   card: {
-    flexDirection: 'row', backgroundColor: Colors.surface, borderRadius: Radius.sm,
-    marginBottom: 10, overflow: 'hidden', borderWidth: 0.5, borderColor: Colors.border, alignItems: 'center',
+    flexDirection: 'row', backgroundColor: 'rgba(11,18,33,0.8)', borderRadius: 16,
+    marginBottom: 16, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', alignItems: 'center',
   },
-  cardImage: { width: 90, height: 80 },
-  cardBody: { flex: 1, paddingHorizontal: 12, paddingVertical: 10 },
-  cardCategory: { fontSize: 10, color: Colors.primary, fontWeight: '700', letterSpacing: 0.5, marginBottom: 2, textTransform: 'uppercase' },
-  cardTitle: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.textPrimary, lineHeight: 18, marginBottom: 4 },
-  cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  cardSource: { fontSize: 10, color: Colors.textTertiary },
-  dot: { width: 2, height: 2, borderRadius: 1, backgroundColor: Colors.textTertiary },
-  cardTime: { fontSize: 10, color: Colors.textTertiary },
-  removeBtn: { padding: 12 },
-  empty: { alignItems: 'center', marginTop: 80, paddingHorizontal: 40 },
-  emptyTitle: { fontSize: FontSize.lg, fontWeight: '700', color: Colors.textPrimary, marginTop: 16, marginBottom: 8 },
-  emptyDesc: { fontSize: FontSize.sm, color: Colors.textTertiary, textAlign: 'center', lineHeight: 20 },
+  cardImage: { width: 110, height: 110 },
+  cardBody: { flex: 1, paddingHorizontal: 16, paddingVertical: 16, justifyContent: 'space-between' },
+  cardCategory: { fontSize: 11, color: Colors.primary, fontWeight: '700', letterSpacing: 0.5, marginBottom: 6, textTransform: 'uppercase' },
+  cardTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary, lineHeight: 22, marginBottom: 8, letterSpacing: -0.3 },
+  cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  cardSource: { fontSize: 11, color: Colors.textSecondary, fontWeight: '500' },
+  dot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: Colors.textTertiary },
+  cardTime: { fontSize: 11, color: Colors.textTertiary },
+  removeBtn: { padding: 16, justifyContent: 'center', alignItems: 'center' },
+  empty: { alignItems: 'center', marginTop: 100, paddingHorizontal: 40 },
+  emptyTitle: { fontSize: 20, fontWeight: '800', color: Colors.textPrimary, marginTop: 24, marginBottom: 8, letterSpacing: -0.5 },
+  emptyDesc: { fontSize: 15, color: Colors.textTertiary, textAlign: 'center', lineHeight: 22 },
 });

@@ -13,6 +13,9 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: Colors.textTertiary,
         tabBarShowLabel: true,
         tabBarLabelStyle: styles.tabLabel,
+        tabBarItemStyle: styles.tabItem,
+        // @ts-ignore: safeAreaInsets is passed to React Navigation
+        safeAreaInsets: { bottom: 0 },
       }}
     >
       <Tabs.Screen
@@ -49,17 +52,31 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: Colors.surface,
-    borderTopColor: Colors.border,
-    borderTopWidth: 0.5,
-    height: Platform.OS === 'ios' ? 88 : 64,
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 32 : 16,
+    left: 20,
+    right: 20,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(11, 18, 33, 0.95)',
+    borderTopWidth: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingBottom: 0,
+    elevation: 10,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+  },
+  tabItem: {
     paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 8,
-    elevation: 0,
+    paddingBottom: 8,
   },
   tabLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 2,
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 4,
+    letterSpacing: 0.5,
   },
 });

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, Platform, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '@/services/api';
@@ -42,7 +42,7 @@ export default function CategoriesScreen() {
     try {
       const res = await api.getCategories();
       setCategories(res.categories || []);
-    } catch {} finally { setLoading(false); }
+    } catch { } finally { setLoading(false); }
   };
 
   const selectCategory = async (name: string) => {
@@ -50,7 +50,7 @@ export default function CategoriesScreen() {
     try {
       const res = await api.getArticles(name);
       setArticles(res.articles || []);
-    } catch {}
+    } catch { }
   };
 
   if (selectedCat) {
@@ -61,7 +61,7 @@ export default function CategoriesScreen() {
             <Text style={styles.backText}>{'←'}</Text>
           </TouchableOpacity>
           <Text style={styles.catTitle}>{selectedCat}</Text>
-          <Text style={styles.catCount}>{articles.length} articles</Text>
+          <Text style={styles.catCount}>{articles.length} stories</Text>
         </View>
         <FlatList
           data={articles}
@@ -83,7 +83,7 @@ export default function CategoriesScreen() {
   }
 
   return (
-    <View testID="categories-screen" style={[styles.container, { paddingTop: insets.top }]}>
+    <ScrollView testID="categories-screen" style={[styles.container, { paddingTop: insets.top }]} contentContainerStyle={{ paddingBottom: 120 }}>
       <Text style={styles.pageTitle}>Explore Categories</Text>
       <Text style={styles.pageSubtitle}>Discover AI news by topic</Text>
       <View style={styles.grid}>
@@ -101,32 +101,33 @@ export default function CategoriesScreen() {
           );
         })}
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  pageTitle: { fontSize: FontSize.xl, fontWeight: '800', color: Colors.textPrimary, paddingHorizontal: 16, marginTop: 16, letterSpacing: -0.5 },
-  pageSubtitle: { fontSize: FontSize.sm, color: Colors.textSecondary, paddingHorizontal: 16, marginTop: 4, marginBottom: 24 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 12, gap: 8 },
+  pageTitle: { fontSize: 32, fontWeight: '800', color: Colors.textPrimary, paddingHorizontal: 20, marginTop: 24, letterSpacing: -1 },
+  pageSubtitle: { fontSize: 16, color: Colors.textSecondary, paddingHorizontal: 20, marginTop: 4, marginBottom: 32 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 16, justifyContent: 'space-between', gap: 12 },
   gridItem: {
-    width: '47%', backgroundColor: Colors.surface, borderRadius: Radius.md,
-    padding: 16, borderWidth: 0.5, borderColor: Colors.border, marginBottom: 4,
+    width: '48%', backgroundColor: Colors.surface, borderRadius: 20,
+    padding: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', marginBottom: 8,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 15, elevation: 5
   },
-  gridIcon: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-  gridName: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.textPrimary, marginBottom: 4 },
-  gridCount: { fontSize: FontSize.xs, color: Colors.textTertiary },
-  catHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
-  backBtn: { width: 40, height: 40, borderRadius: 10, backgroundColor: Colors.surfaceHighlight, justifyContent: 'center', alignItems: 'center' },
+  gridIcon: { width: 56, height: 56, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  gridName: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary, marginBottom: 4, letterSpacing: -0.3 },
+  gridCount: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' },
+  catHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, gap: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
+  backBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surfaceHighlight, justifyContent: 'center', alignItems: 'center' },
   backText: { fontSize: 20, color: Colors.textPrimary },
-  catTitle: { fontSize: FontSize.lg, fontWeight: '800', color: Colors.textPrimary, flex: 1, letterSpacing: -0.5 },
-  catCount: { fontSize: FontSize.xs, color: Colors.textTertiary },
-  listContent: { paddingHorizontal: 16, paddingBottom: 100 },
-  articleCard: { flexDirection: 'row', backgroundColor: Colors.surface, borderRadius: Radius.sm, marginBottom: 10, overflow: 'hidden', borderWidth: 0.5, borderColor: Colors.border },
-  articleImage: { width: 100, height: 80 },
-  articleInfo: { flex: 1, padding: 12, justifyContent: 'center' },
-  articleTitle: { fontSize: FontSize.sm, fontWeight: '700', color: Colors.textPrimary, marginBottom: 4 },
-  articleSource: { fontSize: FontSize.xs, color: Colors.primary },
-  emptyText: { fontSize: FontSize.sm, color: Colors.textTertiary, textAlign: 'center', marginTop: 40 },
+  catTitle: { fontSize: 22, fontWeight: '800', color: Colors.textPrimary, flex: 1, letterSpacing: -0.5 },
+  catCount: { fontSize: 12, color: Colors.primary, fontWeight: '700', backgroundColor: Colors.primary + '15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, overflow: 'hidden' },
+  listContent: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 120 },
+  articleCard: { flexDirection: 'row', backgroundColor: 'rgba(11,18,33,0.8)', borderRadius: 16, marginBottom: 16, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  articleImage: { width: 110, height: 110 },
+  articleInfo: { flex: 1, padding: 16, justifyContent: 'space-between' },
+  articleTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary, lineHeight: 22, letterSpacing: -0.3 },
+  articleSource: { fontSize: 11, color: Colors.primary, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  emptyText: { fontSize: 15, color: Colors.textTertiary, textAlign: 'center', marginTop: 40, fontWeight: '500' },
 });

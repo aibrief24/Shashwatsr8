@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions, Platform, Linking, Share, ActivityIndicator, FlatList, ViewToken } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Platform, Linking, Share, ActivityIndicator, FlatList, ViewToken, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,7 +8,7 @@ import { Colors, FontSize, Spacing, Radius, TELEGRAM_URL, WEBSITE_URL } from '@/
 import { LinearGradient } from 'expo-linear-gradient';
 import { Search, Bookmark, BookmarkCheck, ExternalLink, Share2, Send, Globe, Zap, Clock } from 'lucide-react-native';
 
-const { width, height } = Dimensions.get('window');
+
 
 interface Article {
   id: string;
@@ -39,11 +39,12 @@ export default function HomeFeed() {
   const { token, toggleBookmark, isBookmarked } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
   const flatListRef = useRef<FlatList>(null);
 
   const HEADER_HEIGHT = insets.top + 52;
-  const TAB_BAR_HEIGHT = Platform.OS === 'ios' ? 88 : 64;
-  const CARD_HEIGHT = height - HEADER_HEIGHT - TAB_BAR_HEIGHT;
+  const TAB_BAR_OFFSET = Platform.OS === 'ios' ? 100 : 90;
+  const CARD_HEIGHT = height - HEADER_HEIGHT;
 
   useEffect(() => {
     loadArticles();
@@ -63,7 +64,7 @@ export default function HomeFeed() {
   const handleShare = async (article: Article) => {
     try {
       await Share.share({ message: `${article.title}\n\nRead more on AIBrief24:\n${article.article_url}`, title: article.title });
-    } catch {}
+    } catch { }
   };
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -85,7 +86,6 @@ export default function HomeFeed() {
 
   const renderCard = ({ item: article, index }: { item: Article; index: number }) => (
     <View style={[styles.page, { height: CARD_HEIGHT }]}>
-      {/* Image */}
       <View style={styles.imageContainer}>
         <Image source={{ uri: article.image_url }} style={styles.image} resizeMode="cover" />
         <LinearGradient colors={['transparent', 'rgba(2,6,23,0.6)', Colors.background]} style={styles.imageOverlay} />
@@ -100,44 +100,48 @@ export default function HomeFeed() {
         </View>
       </View>
 
-      {/* Content */}
-      <View style={styles.cardContent}>
-        <Text testID={`article-title-${index}`} style={styles.articleTitle} numberOfLines={3}>{article.title}</Text>
-        <Text style={styles.articleSummary} numberOfLines={7}>{article.summary}</Text>
-
-        {/* Meta */}
-        <View style={styles.metaRow}>
-          <Text style={styles.metaSource}>{article.source_name}</Text>
-          <View style={styles.metaDot} />
-          <Clock size={12} color={Colors.textTertiary} />
-          <Text style={styles.metaTime}>{timeAgo(article.published_at)}</Text>
+      <View style={[styles.cardContent, { paddingBottom: TAB_BAR_OFFSET }]}>
+        <View>
+          <Text testID={`article-title-${index}`} style={styles.articleTitle} numberOfLines={3}>{article.title}</Text>
+          <View style={styles.metaRow}>
+            <Text style={styles.metaSource}>{article.source_name}</Text>
+            <View style={styles.metaDot} />
+            <Clock size={12} color={Colors.textTertiary} />
+            <Text style={styles.metaTime}>{timeAgo(article.published_at)}</Text>
+          </View>
         </View>
 
-        {/* Actions */}
+        <Text style={styles.articleSummary} numberOfLines={5}>{article.summary}</Text>
+
         <View style={styles.actions}>
           <TouchableOpacity testID={`read-full-btn-${index}`} style={styles.readBtn} onPress={() => Linking.openURL(article.article_url)} activeOpacity={0.8}>
-            <ExternalLink size={16} color={Colors.primary} />
+            <ExternalLink size={16} color="#fff" />
             <Text style={styles.readBtnText}>Full Article</Text>
           </TouchableOpacity>
-          <TouchableOpacity testID={`share-btn-${index}`} style={styles.actionBtn} onPress={() => handleShare(article)}>
-            <Share2 size={20} color={Colors.textSecondary} strokeWidth={1.5} />
-          </TouchableOpacity>
-          <TouchableOpacity testID={`bookmark-btn-${index}`} style={styles.actionBtn} onPress={() => toggleBookmark(article.id)}>
-            {isBookmarked(article.id) ? <BookmarkCheck size={20} color={Colors.primary} fill={Colors.primary} /> : <Bookmark size={20} color={Colors.textSecondary} strokeWidth={1.5} />}
-          </TouchableOpacity>
+          <View style={styles.actionsRight}>
+            <TouchableOpacity testID={`share-btn-${index}`} style={styles.actionBtn} onPress={() => handleShare(article)}>
+              <Share2 size={18} color={Colors.textSecondary} strokeWidth={2} />
+            </TouchableOpacity>
+            <TouchableOpacity testID={`bookmark-btn-${index}`} style={styles.actionBtn} onPress={() => toggleBookmark(article.id)}>
+              {isBookmarked(article.id) ? (
+                <BookmarkCheck size={18} color={Colors.primary} fill={Colors.primary} />
+              ) : (
+                <Bookmark size={18} color={Colors.textSecondary} strokeWidth={2} />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* CTA */}
         <View style={styles.ctaSection}>
-          <Text style={styles.ctaText}>Want more AI updates?</Text>
+          <Text style={styles.ctaText}>Explore more verified AI stories</Text>
           <View style={styles.ctaBtns}>
             <TouchableOpacity testID={`telegram-btn-${index}`} style={styles.ctaBtn} onPress={() => Linking.openURL(TELEGRAM_URL)}>
               <Send size={14} color={Colors.primary} />
-              <Text style={styles.ctaBtnText}>Telegram</Text>
+              <Text style={styles.ctaBtnText} numberOfLines={1}>Telegram</Text>
             </TouchableOpacity>
-            <TouchableOpacity testID={`website-btn-${index}`} style={styles.ctaBtn} onPress={() => Linking.openURL(WEBSITE_URL)}>
-              <Globe size={14} color={Colors.secondary} />
-              <Text style={[styles.ctaBtnText, { color: Colors.secondary }]}>Website</Text>
+            <TouchableOpacity testID={`website-btn-${index}`} style={[styles.ctaBtn, { backgroundColor: Colors.surfaceHighlight }]} onPress={() => Linking.openURL(WEBSITE_URL)}>
+              <Globe size={14} color={Colors.textPrimary} />
+              <Text style={[styles.ctaBtnText, { color: Colors.textPrimary }]} numberOfLines={1}>Website</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -148,16 +152,19 @@ export default function HomeFeed() {
   return (
     <View testID="home-feed" style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 8, height: HEADER_HEIGHT }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 12, paddingBottom: 16, height: HEADER_HEIGHT }]}>
         <View style={styles.headerLeft}>
-          <View style={styles.headerLogoBadge}><Text style={styles.headerLogoText}>AI</Text></View>
+          <View style={styles.headerLogoBadge}>
+            <LinearGradient colors={[Colors.primary, Colors.secondary]} style={StyleSheet.absoluteFillObject} />
+            <Text style={styles.headerLogoText}>AI</Text>
+          </View>
           <View>
             <Text style={styles.headerTitle}>AIBrief24</Text>
-            <Text style={styles.headerSub}>{articles.length} stories today</Text>
+            <Text style={styles.headerSub}>Fresh AI updates today</Text>
           </View>
         </View>
         <TouchableOpacity testID="search-btn" style={styles.headerBtn} onPress={() => router.push('/search')}>
-          <Search size={22} color={Colors.textPrimary} strokeWidth={1.5} />
+          <Search size={20} color={Colors.textPrimary} strokeWidth={2} />
         </TouchableOpacity>
       </View>
 
@@ -176,10 +183,11 @@ export default function HomeFeed() {
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
         getItemLayout={(_, index) => ({ length: CARD_HEIGHT, offset: CARD_HEIGHT * index, index })}
+        contentContainerStyle={{ paddingBottom: TAB_BAR_OFFSET }}
       />
 
       {/* Page counter */}
-      <View style={[styles.pageCounter, { bottom: 12 }]}>
+      <View pointerEvents="none" style={[styles.pageCounter, { bottom: TAB_BAR_OFFSET + 12 }]}>
         <Text style={styles.pageCounterText}>{currentIndex + 1}/{articles.length}</Text>
       </View>
     </View>
@@ -191,51 +199,53 @@ const styles = StyleSheet.create({
   center: { justifyContent: 'center', alignItems: 'center' },
   loadingText: { color: Colors.textSecondary, fontSize: FontSize.sm, marginTop: 12 },
   header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end',
-    paddingHorizontal: 16, paddingBottom: 8, backgroundColor: Colors.background, zIndex: 10,
-    borderBottomWidth: 0.5, borderBottomColor: Colors.border,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 20, backgroundColor: Colors.background, zIndex: 10,
+    borderBottomWidth: 0,
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headerLogoBadge: { width: 36, height: 36, borderRadius: 10, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center' },
-  headerLogoText: { fontSize: 14, fontWeight: '900', color: '#fff' },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  headerLogoBadge: { width: 38, height: 38, borderRadius: 12, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  headerLogoText: { fontSize: 13, fontWeight: '900', color: '#fff', letterSpacing: 0.5 },
   headerTitle: { fontSize: FontSize.lg, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5 },
-  headerSub: { fontSize: FontSize.xs, color: Colors.textTertiary },
-  headerBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: Colors.surfaceHighlight, justifyContent: 'center', alignItems: 'center' },
-  page: { width: '100%' },
-  imageContainer: { height: '32%', width: '100%', position: 'relative' },
+  headerSub: { fontSize: 11, color: Colors.primary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 },
+  headerBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.surfaceHighlight, justifyContent: 'center', alignItems: 'center' },
+  page: { width: '100%', overflow: 'hidden' },
+  imageContainer: { flex: 0.35, width: '100%', position: 'relative' },
   image: { width: '100%', height: '100%' },
-  imageOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '60%' },
+  imageOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '80%' },
   breakingBadge: {
-    position: 'absolute', top: 12, left: 12, flexDirection: 'row', alignItems: 'center',
-    backgroundColor: Colors.accent, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, gap: 4,
+    position: 'absolute', top: 16, left: 16, flexDirection: 'row', alignItems: 'center',
+    backgroundColor: Colors.accent, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, gap: 5,
+    shadowColor: Colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
   },
-  breakingText: { color: '#fff', fontSize: 11, fontWeight: '800', letterSpacing: 1 },
+  breakingText: { color: '#fff', fontSize: 10, fontWeight: '800', letterSpacing: 1.5 },
   categoryBadge: {
-    position: 'absolute', top: 12, right: 12,
-    backgroundColor: 'rgba(15,23,42,0.8)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6,
-    borderWidth: 0.5, borderColor: Colors.border,
+    position: 'absolute', top: 16, right: 16,
+    backgroundColor: 'rgba(11, 18, 33, 0.75)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)',
   },
-  categoryText: { color: Colors.primary, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
-  cardContent: { flex: 1, paddingHorizontal: 16, paddingTop: 4 },
-  articleTitle: { fontSize: 20, fontWeight: '800', color: Colors.textPrimary, lineHeight: 26, letterSpacing: -0.3, marginBottom: 8 },
-  articleSummary: { fontSize: FontSize.sm, color: Colors.textSecondary, lineHeight: 22, marginBottom: 10 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 6 },
-  metaSource: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: '600' },
-  metaDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: Colors.textTertiary },
-  metaTime: { fontSize: FontSize.xs, color: Colors.textTertiary },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  readBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.primary + '15', paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.sm, borderWidth: 0.5, borderColor: Colors.primary + '30' },
-  readBtnText: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: '600' },
-  actionBtn: { width: 40, height: 40, borderRadius: 10, backgroundColor: Colors.surfaceHighlight, justifyContent: 'center', alignItems: 'center' },
-  ctaSection: { borderTopWidth: 0.5, borderTopColor: Colors.border, paddingTop: 10 },
-  ctaText: { fontSize: FontSize.xs, color: Colors.textTertiary, marginBottom: 6, textAlign: 'center' },
-  ctaBtns: { flexDirection: 'row', justifyContent: 'center', gap: 12 },
-  ctaBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.sm, backgroundColor: Colors.surfaceHighlight },
-  ctaBtnText: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: '600' },
+  categoryText: { color: '#fff', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+  cardContent: { flex: 0.65, paddingHorizontal: 20, paddingTop: 16, backgroundColor: Colors.background, justifyContent: 'space-between' },
+  articleTitle: { fontSize: 21, fontWeight: '800', color: Colors.textPrimary, lineHeight: 28, letterSpacing: -0.5, marginBottom: 8 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 8 },
+  metaSource: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  metaDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: Colors.textTertiary },
+  metaTime: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: '500' },
+  articleSummary: { fontSize: 14, color: Colors.textSecondary, lineHeight: 22, fontWeight: '400' },
+  actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  readBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: Radius.full, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
+  readBtnText: { fontSize: FontSize.sm, color: '#fff', fontWeight: '700', letterSpacing: 0.5 },
+  actionsRight: { flexDirection: 'row', gap: 12 },
+  actionBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surfaceHighlight, justifyContent: 'center', alignItems: 'center' },
+  ctaSection: { borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 16, alignItems: 'center' },
+  ctaText: { fontSize: 12, color: Colors.textTertiary, marginBottom: 12, letterSpacing: 0.5, fontWeight: '600', textTransform: 'uppercase' },
+  ctaBtns: { flexDirection: 'row', justifyContent: 'center', gap: 12, width: '100%', flexWrap: 'wrap' },
+  ctaBtn: { flex: 1, minWidth: '45%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, paddingHorizontal: 4, borderRadius: Radius.md, backgroundColor: Colors.primary + '15' },
+  ctaBtnText: { fontSize: 13, color: Colors.primary, fontWeight: '700', letterSpacing: 0.5 },
   pageCounter: {
-    position: 'absolute', right: 16,
-    backgroundColor: 'rgba(15,23,42,0.9)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12,
-    borderWidth: 0.5, borderColor: Colors.border,
+    position: 'absolute', right: 20,
+    backgroundColor: 'rgba(11, 18, 33, 0.9)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)',
   },
-  pageCounterText: { fontSize: 11, color: Colors.textSecondary, fontWeight: '600' },
+  pageCounterText: { fontSize: 11, color: Colors.textSecondary, fontWeight: '700', letterSpacing: 1 },
 });

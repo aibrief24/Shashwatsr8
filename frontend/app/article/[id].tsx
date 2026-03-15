@@ -32,14 +32,14 @@ export default function ArticleDetail() {
     try {
       const data = await api.getArticle(id!);
       setArticle(data);
-    } catch {} finally { setLoading(false); }
+    } catch { } finally { setLoading(false); }
   };
 
   const handleShare = async () => {
     if (!article) return;
     try {
       await Share.share({ message: `${article.title}\n\nRead more:\n${article.article_url}`, title: article.title });
-    } catch {}
+    } catch { }
   };
 
   if (loading) {
@@ -63,7 +63,7 @@ export default function ArticleDetail() {
         {/* Hero Image */}
         <View style={styles.imageWrap}>
           <Image source={{ uri: article.image_url }} style={styles.heroImage} resizeMode="cover" />
-          <LinearGradient colors={['rgba(2,6,23,0.5)', 'transparent', 'rgba(2,6,23,0.8)']} style={styles.imageOverlay} />
+          <LinearGradient colors={['rgba(2,6,23,0.6)', 'transparent', 'rgba(4,7,16,1)']} style={styles.imageOverlay} />
           <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
             <TouchableOpacity testID="article-back-btn" style={styles.topBtn} onPress={() => router.back()}>
               <ArrowLeft size={22} color="#fff" />
@@ -152,35 +152,35 @@ const styles = StyleSheet.create({
   errorText: { color: Colors.textSecondary, fontSize: FontSize.base },
   backLink: { color: Colors.primary, fontSize: FontSize.sm, marginTop: 12 },
   scrollContent: { paddingBottom: 40 },
-  imageWrap: { width: '100%', height: 280, position: 'relative' },
+  imageWrap: { width: '100%', height: 420, position: 'relative' },
   heroImage: { width: '100%', height: '100%' },
   imageOverlay: { ...StyleSheet.absoluteFillObject },
-  topBar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16 },
-  topBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-  topRight: { flexDirection: 'row', gap: 8 },
-  breakingBadge: { position: 'absolute', bottom: 16, left: 16, flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.accent, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, gap: 4 },
-  breakingText: { color: '#fff', fontSize: 11, fontWeight: '800', letterSpacing: 1 },
-  content: { padding: 20 },
-  categoryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  categoryBadge: { backgroundColor: Colors.primary + '20', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
-  categoryText: { color: Colors.primary, fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaTime: { fontSize: FontSize.xs, color: Colors.textTertiary },
-  title: { fontSize: 24, fontWeight: '800', color: Colors.textPrimary, lineHeight: 32, letterSpacing: -0.5, marginBottom: 12 },
-  sourceRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 6 },
-  sourceLabel: { fontSize: FontSize.xs, color: Colors.textTertiary },
-  sourceName: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: '600' },
-  summary: { fontSize: FontSize.base, color: Colors.textSecondary, lineHeight: 26, marginBottom: 24 },
-  readOriginalBtn: { marginBottom: 16 },
-  readOriginalGrad: { height: 52, borderRadius: Radius.md, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
-  readOriginalText: { fontSize: FontSize.base, fontWeight: '700', color: '#fff' },
-  actionRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
-  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, backgroundColor: Colors.surfaceHighlight, borderRadius: Radius.sm },
-  actionBtnText: { fontSize: FontSize.sm, fontWeight: '600', color: Colors.textSecondary },
-  ctaBox: { backgroundColor: Colors.surface, borderRadius: Radius.md, padding: 20, alignItems: 'center', borderWidth: 0.5, borderColor: Colors.border },
-  ctaTitle: { fontSize: FontSize.base, fontWeight: '700', color: Colors.textPrimary, marginBottom: 6 },
-  ctaDesc: { fontSize: FontSize.xs, color: Colors.textSecondary, textAlign: 'center', lineHeight: 18, marginBottom: 14 },
-  ctaBtns: { flexDirection: 'row', gap: 10 },
-  ctaBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: Radius.sm, borderWidth: 1 },
-  ctaBtnText: { fontSize: FontSize.sm, fontWeight: '600' },
+  topBar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20 },
+  topBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(11,18,33,0.6)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  topRight: { flexDirection: 'row', gap: 12 },
+  breakingBadge: { position: 'absolute', bottom: 40, left: 24, flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.accent, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, gap: 6, shadowColor: Colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 5 },
+  breakingText: { color: '#fff', fontSize: 12, fontWeight: '800', letterSpacing: 1.5 },
+  content: { padding: 24, backgroundColor: Colors.background, marginTop: -30, borderTopLeftRadius: 30, borderTopRightRadius: 30 },
+  categoryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  categoryBadge: { backgroundColor: 'rgba(11,18,33,0.8)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  categoryText: { color: Colors.primary, fontSize: 12, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  metaTime: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' },
+  title: { fontSize: 32, fontWeight: '800', color: Colors.textPrimary, lineHeight: 40, letterSpacing: -1, marginBottom: 16 },
+  sourceRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 24, gap: 8 },
+  sourceLabel: { fontSize: 14, color: Colors.textTertiary, fontWeight: '500' },
+  sourceName: { fontSize: 15, color: Colors.primary, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  summary: { fontSize: 18, color: Colors.textSecondary, lineHeight: 30, marginBottom: 32, fontWeight: '400' },
+  readOriginalBtn: { marginBottom: 20 },
+  readOriginalGrad: { height: 60, borderRadius: 30, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 15, elevation: 6 },
+  readOriginalText: { fontSize: 16, fontWeight: '700', color: '#fff', letterSpacing: 0.5 },
+  actionRow: { flexDirection: 'row', gap: 16, marginBottom: 32 },
+  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, backgroundColor: Colors.surface, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  actionBtnText: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
+  ctaBox: { backgroundColor: 'rgba(11,18,33,0.8)', borderRadius: 20, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  ctaTitle: { fontSize: 18, fontWeight: '800', color: Colors.textPrimary, marginBottom: 8, letterSpacing: -0.5 },
+  ctaDesc: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22, marginBottom: 20 },
+  ctaBtns: { flexDirection: 'row', gap: 12 },
+  ctaBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, borderWidth: 1 },
+  ctaBtnText: { fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
 });
