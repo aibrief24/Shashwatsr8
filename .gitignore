@@ -96,11 +96,13 @@ android-sdk/
 .env
 .env.*
 !.env.example
-
+frontend/.env
+frontend/.env.*
+backend/.env
+backend/.env.*
 # ===============================
 # Secrets
 # ===============================
 *token.json*
 *credentials.js
-frontend/.metro-cache/
-frontend/.metro-cache/
+
