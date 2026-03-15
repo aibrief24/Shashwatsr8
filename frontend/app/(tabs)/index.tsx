@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Platform, Linking, Share, ActivityIndicator, FlatList, ViewToken, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Platform, Linking, Share, ActivityIndicator, FlatList, ViewToken, useWindowDimensions, LayoutAnimation, UIManager } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
@@ -31,6 +31,96 @@ function timeAgo(dateStr: string): string {
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   return `${Math.floor(diff / 86400)}d ago`;
 }
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const ArticleCard = ({ article, index, toggleBookmark, isBookmarked, handleShare, TAB_BAR_OFFSET, CARD_HEIGHT }: any) => {
+  const [expanded, setExpanded] = useState(false);
+  const router = useRouter();
+
+  const handleExpand = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpanded(!expanded);
+  };
+
+  return (
+    <View style={[styles.page, { height: CARD_HEIGHT }]}>
+      <TouchableOpacity
+        activeOpacity={1}
+        style={{ flex: 1 }}
+        onPress={() => router.push(`/article/${article.id}`)}
+      >
+        <View style={styles.imageContainer}>
+          <Image source={{ uri: article.image_url }} style={styles.image} resizeMode="cover" />
+          <LinearGradient colors={['transparent', 'rgba(2,6,23,0.6)', Colors.background]} style={styles.imageOverlay} />
+          {article.is_breaking && (
+            <View style={styles.breakingBadge}>
+              <Zap size={12} color="#fff" fill="#fff" />
+              <Text style={styles.breakingText}>BREAKING</Text>
+            </View>
+          )}
+          <View style={styles.categoryBadge}>
+            <Text style={styles.categoryText}>{article.category}</Text>
+          </View>
+        </View>
+
+        <View style={[styles.cardContent, { paddingBottom: TAB_BAR_OFFSET }]}>
+          <View style={styles.titleSection}>
+            <Text testID={`article-title-${index}`} style={styles.articleTitle} numberOfLines={3}>{article.title}</Text>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaSource}>{article.source_name}</Text>
+              <View style={styles.metaDot} />
+              <Clock size={12} color={Colors.textTertiary} />
+              <Text style={styles.metaTime}>{timeAgo(article.published_at)}</Text>
+            </View>
+          </View>
+
+          <View style={styles.summaryContainer}>
+            <Text style={styles.articleSummary} numberOfLines={expanded ? undefined : 4} ellipsizeMode="tail">{article.summary}</Text>
+            <TouchableOpacity onPress={handleExpand} style={styles.expandBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={styles.expandBtnText}>{expanded ? 'Read less' : 'Read more'}</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.actions}>
+            <TouchableOpacity testID={`read-full-btn-${index}`} style={styles.readBtn} onPress={() => Linking.openURL(article.article_url)} activeOpacity={0.8}>
+              <ExternalLink size={16} color="#fff" />
+              <Text style={styles.readBtnText}>Full Article</Text>
+            </TouchableOpacity>
+            <View style={styles.actionsRight}>
+              <TouchableOpacity testID={`share-btn-${index}`} style={styles.actionBtn} onPress={() => handleShare(article)}>
+                <Share2 size={18} color={Colors.textSecondary} strokeWidth={2} />
+              </TouchableOpacity>
+              <TouchableOpacity testID={`bookmark-btn-${index}`} style={styles.actionBtn} onPress={() => toggleBookmark(article.id)}>
+                {isBookmarked(article.id) ? (
+                  <BookmarkCheck size={18} color={Colors.primary} fill={Colors.primary} />
+                ) : (
+                  <Bookmark size={18} color={Colors.textSecondary} strokeWidth={2} />
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.ctaSection}>
+            <Text style={styles.ctaText}>Explore more verified AI stories</Text>
+            <View style={styles.ctaBtns}>
+              <TouchableOpacity testID={`telegram-btn-${index}`} style={styles.ctaBtn} onPress={() => Linking.openURL(TELEGRAM_URL)}>
+                <Send size={14} color={Colors.primary} />
+                <Text style={styles.ctaBtnText} numberOfLines={1}>Telegram</Text>
+              </TouchableOpacity>
+              <TouchableOpacity testID={`website-btn-${index}`} style={[styles.ctaBtn, { backgroundColor: Colors.surfaceHighlight }]} onPress={() => Linking.openURL(WEBSITE_URL)}>
+                <Globe size={14} color={Colors.textPrimary} />
+                <Text style={[styles.ctaBtnText, { color: Colors.textPrimary }]} numberOfLines={1}>Website</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </TouchableOpacity>
+    </View>
+  );
+};
 
 export default function HomeFeed() {
   const [articles, setArticles] = useState<Article[]>([]);
@@ -85,68 +175,15 @@ export default function HomeFeed() {
   }
 
   const renderCard = ({ item: article, index }: { item: Article; index: number }) => (
-    <View style={[styles.page, { height: CARD_HEIGHT }]}>
-      <View style={styles.imageContainer}>
-        <Image source={{ uri: article.image_url }} style={styles.image} resizeMode="cover" />
-        <LinearGradient colors={['transparent', 'rgba(2,6,23,0.6)', Colors.background]} style={styles.imageOverlay} />
-        {article.is_breaking && (
-          <View style={styles.breakingBadge}>
-            <Zap size={12} color="#fff" fill="#fff" />
-            <Text style={styles.breakingText}>BREAKING</Text>
-          </View>
-        )}
-        <View style={styles.categoryBadge}>
-          <Text style={styles.categoryText}>{article.category}</Text>
-        </View>
-      </View>
-
-      <View style={[styles.cardContent, { paddingBottom: TAB_BAR_OFFSET }]}>
-        <View>
-          <Text testID={`article-title-${index}`} style={styles.articleTitle} numberOfLines={3}>{article.title}</Text>
-          <View style={styles.metaRow}>
-            <Text style={styles.metaSource}>{article.source_name}</Text>
-            <View style={styles.metaDot} />
-            <Clock size={12} color={Colors.textTertiary} />
-            <Text style={styles.metaTime}>{timeAgo(article.published_at)}</Text>
-          </View>
-        </View>
-
-        <Text style={styles.articleSummary} numberOfLines={5}>{article.summary}</Text>
-
-        <View style={styles.actions}>
-          <TouchableOpacity testID={`read-full-btn-${index}`} style={styles.readBtn} onPress={() => Linking.openURL(article.article_url)} activeOpacity={0.8}>
-            <ExternalLink size={16} color="#fff" />
-            <Text style={styles.readBtnText}>Full Article</Text>
-          </TouchableOpacity>
-          <View style={styles.actionsRight}>
-            <TouchableOpacity testID={`share-btn-${index}`} style={styles.actionBtn} onPress={() => handleShare(article)}>
-              <Share2 size={18} color={Colors.textSecondary} strokeWidth={2} />
-            </TouchableOpacity>
-            <TouchableOpacity testID={`bookmark-btn-${index}`} style={styles.actionBtn} onPress={() => toggleBookmark(article.id)}>
-              {isBookmarked(article.id) ? (
-                <BookmarkCheck size={18} color={Colors.primary} fill={Colors.primary} />
-              ) : (
-                <Bookmark size={18} color={Colors.textSecondary} strokeWidth={2} />
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.ctaSection}>
-          <Text style={styles.ctaText}>Explore more verified AI stories</Text>
-          <View style={styles.ctaBtns}>
-            <TouchableOpacity testID={`telegram-btn-${index}`} style={styles.ctaBtn} onPress={() => Linking.openURL(TELEGRAM_URL)}>
-              <Send size={14} color={Colors.primary} />
-              <Text style={styles.ctaBtnText} numberOfLines={1}>Telegram</Text>
-            </TouchableOpacity>
-            <TouchableOpacity testID={`website-btn-${index}`} style={[styles.ctaBtn, { backgroundColor: Colors.surfaceHighlight }]} onPress={() => Linking.openURL(WEBSITE_URL)}>
-              <Globe size={14} color={Colors.textPrimary} />
-              <Text style={[styles.ctaBtnText, { color: Colors.textPrimary }]} numberOfLines={1}>Website</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </View>
+    <ArticleCard
+      article={article}
+      index={index}
+      toggleBookmark={toggleBookmark}
+      isBookmarked={isBookmarked}
+      handleShare={handleShare}
+      TAB_BAR_OFFSET={TAB_BAR_OFFSET}
+      CARD_HEIGHT={CARD_HEIGHT}
+    />
   );
 
   return (
@@ -225,20 +262,24 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)',
   },
   categoryText: { color: '#fff', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
-  cardContent: { flex: 0.65, paddingHorizontal: 20, paddingTop: 16, backgroundColor: Colors.background, justifyContent: 'space-between' },
-  articleTitle: { fontSize: 21, fontWeight: '800', color: Colors.textPrimary, lineHeight: 28, letterSpacing: -0.5, marginBottom: 8 },
+  cardContent: { flex: 0.65, paddingHorizontal: 20, paddingTop: 12, backgroundColor: Colors.background, justifyContent: 'space-between' },
+  titleSection: { marginBottom: 0 },
+  articleTitle: { fontSize: 18, fontWeight: '800', color: Colors.textPrimary, lineHeight: 24, letterSpacing: -0.5, marginBottom: 8 },
   metaRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 8 },
   metaSource: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   metaDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: Colors.textTertiary },
   metaTime: { fontSize: FontSize.xs, color: Colors.textSecondary, fontWeight: '500' },
+  summaryContainer: { flex: 1, justifyContent: 'center', marginVertical: 4 },
   articleSummary: { fontSize: 14, color: Colors.textSecondary, lineHeight: 22, fontWeight: '400' },
-  actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  expandBtn: { marginTop: 6, alignSelf: 'flex-start', paddingVertical: 4, paddingRight: 20 },
+  expandBtnText: { color: Colors.primary, fontSize: 13, fontWeight: '700', letterSpacing: 0.5 },
+  actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   readBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: Radius.full, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
   readBtnText: { fontSize: FontSize.sm, color: '#fff', fontWeight: '700', letterSpacing: 0.5 },
   actionsRight: { flexDirection: 'row', gap: 12 },
   actionBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surfaceHighlight, justifyContent: 'center', alignItems: 'center' },
-  ctaSection: { borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 16, alignItems: 'center' },
-  ctaText: { fontSize: 12, color: Colors.textTertiary, marginBottom: 12, letterSpacing: 0.5, fontWeight: '600', textTransform: 'uppercase' },
+  ctaSection: { borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 12, alignItems: 'center' },
+  ctaText: { fontSize: 11, color: Colors.textTertiary, marginBottom: 10, letterSpacing: 0.5, fontWeight: '600', textTransform: 'uppercase' },
   ctaBtns: { flexDirection: 'row', justifyContent: 'center', gap: 12, width: '100%', flexWrap: 'wrap' },
   ctaBtn: { flex: 1, minWidth: '45%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, paddingHorizontal: 4, borderRadius: Radius.md, backgroundColor: Colors.primary + '15' },
   ctaBtnText: { fontSize: 13, color: Colors.primary, fontWeight: '700', letterSpacing: 0.5 },
