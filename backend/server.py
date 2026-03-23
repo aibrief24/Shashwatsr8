@@ -282,6 +282,34 @@ def get_articles(category: Optional[str] = None, limit: int = 50, offset: int = 
             total_rows = query("SELECT count(*) as cnt FROM articles WHERE status = 'published' AND published_at >= NOW() - INTERVAL '7 days'")
             
     total = total_rows[0]["cnt"] if total_rows else 0
+
+    # ── arXiv curation for home feed ─────────────────────────────────────────
+    # Cap arXiv at MAX_ARXIV items and prevent consecutive arXiv cards
+    if not category or category == "Latest":
+        MAX_ARXIV = 2
+        rows = rows or []
+        arxiv_items = [r for r in rows if "arxiv.org" in (r.get("article_url") or "").lower()]
+        non_arxiv = [r for r in rows if r not in arxiv_items]
+
+        # Keep only the freshest MAX_ARXIV arXiv papers (already sorted by date)
+        kept_arxiv = arxiv_items[:MAX_ARXIV]
+
+        # Interleave: place arXiv cards with gaps (never back-to-back)
+        curated = []
+        arxiv_q = list(kept_arxiv)
+        gap = 0
+        for art in non_arxiv:
+            curated.append(art)
+            gap += 1
+            # Insert an arXiv card every ~4 non-arXiv cards
+            if arxiv_q and gap >= 4:
+                curated.append(arxiv_q.pop(0))
+                gap = 0
+        # Append any remaining arXiv at the end (still respects the cap)
+        curated.extend(arxiv_q)
+
+        rows = curated
+
     return {"articles": _serialize_list(rows or []), "total": total}
 
 
@@ -461,7 +489,7 @@ def trigger_ingestion():
 def recategorize_articles():
     """Re-categorize all 'Latest' articles using the improved keyword set."""
     try:
-        from ingestor import _detect_category
+        from ingestor import _detect_category_strict
         rows = query("SELECT id, title, summary FROM articles")
         if not rows:
             return {"updated": 0, "message": "No articles need re-categorization"}
@@ -472,7 +500,7 @@ def recategorize_articles():
         try:
             with conn.cursor() as cur:
                 for row in rows:
-                    cat = _detect_category(str(row.get("title", "")), str(row.get("summary", "")))
+                    cat, _, _ = _detect_category_strict(str(row.get("title", "")), str(row.get("summary", "")))
                     if cat != "Latest":
                         cur.execute(
                             "UPDATE articles SET category = %s WHERE id = %s::uuid",

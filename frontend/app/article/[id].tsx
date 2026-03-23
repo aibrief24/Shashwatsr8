@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Linking, Share, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Linking, Share, Platform, ActivityIndicator } from 'react-native';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
@@ -62,7 +63,15 @@ export default function ArticleDetail() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Hero Image */}
         <View style={styles.imageWrap}>
-          <Image source={{ uri: article.image_url }} style={styles.heroImage} resizeMode="cover" />
+          <Image
+            source={{ uri: article.image_url }}
+            style={styles.heroImage}
+            contentFit="cover"
+            transition={300}
+            priority="high"
+            cachePolicy="memory-disk"
+            placeholder="#080e1e"
+          />
           <LinearGradient colors={['rgba(2,6,23,0.6)', 'transparent', 'rgba(4,7,16,1)']} style={styles.imageOverlay} />
           <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
             <TouchableOpacity testID="article-back-btn" style={styles.topBtn} onPress={() => router.back()}>
@@ -72,7 +81,7 @@ export default function ArticleDetail() {
               <TouchableOpacity testID="article-share-btn" style={styles.topBtn} onPress={handleShare}>
                 <Share2 size={20} color="#fff" strokeWidth={1.5} />
               </TouchableOpacity>
-              <TouchableOpacity testID="article-bookmark-btn" style={styles.topBtn} onPress={() => toggleBookmark(article.id)}>
+              <TouchableOpacity testID="article-bookmark-btn" style={styles.topBtn} onPress={() => toggleBookmark(article.id, bookmarked)}>
                 {bookmarked ? <BookmarkCheck size={20} color={Colors.primary} fill={Colors.primary} /> : <Bookmark size={20} color="#fff" strokeWidth={1.5} />}
               </TouchableOpacity>
             </View>
@@ -119,7 +128,7 @@ export default function ArticleDetail() {
               <Share2 size={18} color={Colors.textSecondary} strokeWidth={1.5} />
               <Text style={styles.actionBtnText}>Share</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => toggleBookmark(article.id)}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => toggleBookmark(article.id, bookmarked)}>
               {bookmarked ? <BookmarkCheck size={18} color={Colors.primary} fill={Colors.primary} /> : <Bookmark size={18} color={Colors.textSecondary} strokeWidth={1.5} />}
               <Text style={[styles.actionBtnText, bookmarked && { color: Colors.primary }]}>{bookmarked ? 'Saved' : 'Save'}</Text>
             </TouchableOpacity>

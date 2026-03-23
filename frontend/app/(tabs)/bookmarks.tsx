@@ -32,7 +32,7 @@ export default function BookmarksScreen() {
   useEffect(() => { loadBookmarks(); }, [bookmarkIds]);
 
   const handleRemove = async (id: string) => {
-    await toggleBookmark(id);
+    await toggleBookmark(id, true);
     setArticles(prev => prev.filter(a => a.id !== id));
   };
 

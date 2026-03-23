@@ -7,13 +7,19 @@ import { Colors } from '@/constants/theme';
 import { useRouter } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { api } from '@/services/api';
+import * as SplashScreen from 'expo-splash-screen';
 
-
-
+try { SplashScreen.preventAutoHideAsync(); } catch { }
 
 function AppContent() {
-  const { user, token } = useAuth();
+  const { user, token, loading } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    if (!loading) {
+      try { SplashScreen.hideAsync(); } catch { }
+    }
+  }, [loading]);
 
   useEffect(() => {
     // Push notifications removed for Expo Go compatibility

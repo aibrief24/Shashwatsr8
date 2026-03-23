@@ -19,7 +19,7 @@ interface AuthState {
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   completeOnboarding: () => Promise<void>;
-  toggleBookmark: (articleId: string) => Promise<void>;
+  toggleBookmark: (articleId: string, isCurrentlyBookmarked: boolean) => Promise<void>;
   isBookmarked: (articleId: string) => boolean;
   refreshBookmarks: () => Promise<void>;
 }
@@ -42,49 +42,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const loadSession = async () => {
+    console.time('[Perf] App Startup: Session Restore');
     try {
       const [savedToken, savedRefresh, onboarded] = await Promise.all([
         AsyncStorage.getItem('auth_token'),
         AsyncStorage.getItem('auth_refresh_token'),
         AsyncStorage.getItem('has_onboarded'),
       ]);
+
       setHasOnboarded(onboarded === 'true');
+
       if (savedToken) {
-        try {
-          const userData = await api.getMe(savedToken);
-          setUser(userData);
-          setToken(savedToken);
+        // Optimistically trust local token to unblock splash immediately
+        setToken(savedToken);
+        setUser({ id: 'temp', email: '', name: 'User' }); // placeholder until network sync
+
+        console.timeEnd('[Perf] App Startup: Session Restore');
+
+        // Background network sync
+        ; (async () => {
+          console.time('[Perf] Background User Sync');
           try {
-            const bm = await api.getBookmarkIds(savedToken);
-            setBookmarkIds(bm.ids || []);
-          } catch {}
-        } catch {
-          // Token expired — try refresh
-          if (savedRefresh) {
+            const userData = await api.getMe(savedToken);
+            setUser(userData);
+            console.timeEnd('[Perf] Background User Sync');
+
             try {
-              const refreshRes = await api.refreshToken(savedRefresh);
-              const newToken = refreshRes.access_token;
-              const newRefresh = refreshRes.refresh_token;
-              if (newToken) {
-                await AsyncStorage.setItem('auth_token', newToken);
-                if (newRefresh) await AsyncStorage.setItem('auth_refresh_token', newRefresh);
-                const userData = await api.getMe(newToken);
-                setUser(userData);
-                setToken(newToken);
-                try {
-                  const bm = await api.getBookmarkIds(newToken);
-                  setBookmarkIds(bm.ids || []);
-                } catch {}
-              } else {
-                await clearStoredAuth();
+              console.time('[Perf] Background Bookmark Sync');
+              const bm = await api.getBookmarkIds(savedToken);
+              setBookmarkIds(bm.ids || []);
+              console.timeEnd('[Perf] Background Bookmark Sync');
+            } catch { }
+          } catch {
+            // Token expired — try refresh silently
+            if (savedRefresh) {
+              try {
+                const refreshRes = await api.refreshToken(savedRefresh);
+                const newToken = refreshRes.access_token;
+                const newRefresh = refreshRes.refresh_token;
+                if (newToken) {
+                  await AsyncStorage.setItem('auth_token', newToken);
+                  if (newRefresh) await AsyncStorage.setItem('auth_refresh_token', newRefresh);
+                  setToken(newToken);
+                  const userData = await api.getMe(newToken);
+                  setUser(userData);
+                  try {
+                    const bm = await api.getBookmarkIds(newToken);
+                    setBookmarkIds(bm.ids || []);
+                  } catch { }
+                } else {
+                  await logout();
+                }
+              } catch {
+                await logout();
               }
-            } catch {
-              await clearStoredAuth();
+            } else {
+              await logout();
             }
-          } else {
-            await clearStoredAuth();
           }
-        }
+        })();
       }
     } catch {
       await clearStoredAuth();
@@ -94,17 +110,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const login = async (email: string, password: string) => {
+    console.time('[Perf] Login Request Lifecycle');
     const res = await api.login(email, password);
     const accessToken = res.access_token;
     if (!accessToken) throw new Error('Login failed: no token returned');
+
     setUser(res.user);
     setToken(accessToken);
     await AsyncStorage.setItem('auth_token', accessToken);
     if (res.refresh_token) await AsyncStorage.setItem('auth_refresh_token', res.refresh_token);
-    try {
-      const bm = await api.getBookmarkIds(accessToken);
-      setBookmarkIds(bm.ids || []);
-    } catch {}
+
+    console.timeEnd('[Perf] Login Request Lifecycle');
+
+    // Background fetch (non-blocking)
+    console.time('[Perf] Post-Login Background Bookmarks');
+    api.getBookmarkIds(accessToken)
+      .then(bm => { setBookmarkIds(bm.ids || []); console.timeEnd('[Perf] Post-Login Background Bookmarks'); })
+      .catch(() => { });
   };
 
   const signup = async (email: string, password: string, name: string): Promise<{ needsConfirmation?: boolean }> => {
@@ -124,7 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     try {
       if (token) await api.logout(token);
-    } catch {}
+    } catch { }
     setUser(null);
     setToken(null);
     setBookmarkIds([]);
@@ -140,16 +162,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.setItem('has_onboarded', 'true');
   };
 
-  const toggleBookmark = useCallback(async (articleId: string) => {
+  const toggleBookmark = useCallback(async (articleId: string, isCurrentlyBookmarked: boolean) => {
     if (!token) return;
-    if (bookmarkIds.includes(articleId)) {
+    if (isCurrentlyBookmarked) {
       setBookmarkIds(prev => prev.filter(id => id !== articleId));
       await api.removeBookmark(token, articleId);
     } else {
       setBookmarkIds(prev => [...prev, articleId]);
       await api.addBookmark(token, articleId);
     }
-  }, [token, bookmarkIds]);
+  }, [token]);
 
   const isBookmarked = useCallback((articleId: string) => {
     return bookmarkIds.includes(articleId);
@@ -160,7 +182,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const bm = await api.getBookmarkIds(token);
       setBookmarkIds(bm.ids || []);
-    } catch {}
+    } catch { }
   }, [token]);
 
   return (

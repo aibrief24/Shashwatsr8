@@ -24,7 +24,7 @@ export default function SettingsScreen() {
   };
 
   const SettingRow = ({ icon: Icon, label, value, onPress, color = Colors.textPrimary, rightElement }: any) => (
-    <TouchableOpacity testID={`setting-${label.toLowerCase().replace(/\s/g, '-')}`} style={styles.row} onPress={onPress} activeOpacity={onPress ? 0.7 : 1}>
+    <TouchableOpacity testID={`setting-${label.toLowerCase().replace(/\s/g, '-')}`} style={styles.row} onPress={onPress} activeOpacity={onPress ? 0.7 : 1} disabled={!onPress}>
       <View style={styles.rowLeft}>
         <View style={[styles.rowIcon, { backgroundColor: (color || Colors.primary) + '15' }]}>
           <Icon size={18} color={color || Colors.primary} strokeWidth={1.5} />
@@ -76,7 +76,7 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <SettingRow icon={Info} label="App Version" value="1.0.0" color={Colors.textTertiary} />
         <View style={styles.divider} />
-        <SettingRow icon={Shield} label="Privacy Policy" color={Colors.textTertiary} onPress={() => Linking.openURL(WEBSITE_URL + 'privacy')} />
+        <SettingRow icon={Shield} label="Privacy Policy" color={Colors.textTertiary} onPress={() => router.push('/privacy' as any)} />
       </View>
 
       {/* Logout */}

@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Platform, Linking, Share, ActivityIndicator, FlatList, ViewToken, useWindowDimensions, LayoutAnimation, UIManager } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, Image as RNImage, TouchableOpacity, Platform, Linking, Share, ActivityIndicator, FlatList, ViewToken, useWindowDimensions, LayoutAnimation, UIManager, Animated } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
@@ -15,11 +16,14 @@ interface Article {
   title: string;
   summary: string;
   image_url: string;
+  thumbnail_url?: string;
   source_name: string;
+  source_url: string;
   category: string;
   published_at: string;
   article_url: string;
   is_breaking?: boolean;
+  image_source_type?: string;
 }
 
 function timeAgo(dateStr: string): string {
@@ -36,7 +40,42 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const ArticleCard = ({ article, index, toggleBookmark, isBookmarked, handleShare, TAB_BAR_OFFSET, CARD_HEIGHT }: any) => {
+const AnimatedSkeleton = ({ CARD_HEIGHT, TAB_BAR_OFFSET }: any) => {
+  const op = useRef(new Animated.Value(0.3)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(op, { toValue: 0.7, duration: 800, useNativeDriver: true }),
+        Animated.timing(op, { toValue: 0.3, duration: 800, useNativeDriver: true })
+      ])
+    ).start();
+  }, [op]);
+
+  return (
+    <View style={[styles.page, { height: CARD_HEIGHT, paddingBottom: TAB_BAR_OFFSET }]}>
+      <View style={{ flex: 1, backgroundColor: '#0B1221' }}>
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#1A2438', opacity: op }]} />
+        <View style={styles.imageOverlay} />
+
+        {/* Skeleton UI blocks */}
+        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, zIndex: 10 }}>
+          <View style={{ width: 80, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.1)', marginBottom: 16 }} />
+          <View style={{ width: '90%', height: 32, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.1)', marginBottom: 12 }} />
+          <View style={{ width: '70%', height: 32, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.1)', marginBottom: 16 }} />
+
+          <View style={{ width: '100%', height: 60, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)', marginBottom: 24 }} />
+
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ width: 120, height: 20, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.05)' }} />
+            <View style={{ width: 100, height: 20, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.05)' }} />
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+const ArticleCard = React.memo(({ article, index, toggleBookmark, bookmarked, handleShare, TAB_BAR_OFFSET, CARD_HEIGHT }: any) => {
   const [expanded, setExpanded] = useState(false);
   const router = useRouter();
 
@@ -53,7 +92,70 @@ const ArticleCard = ({ article, index, toggleBookmark, isBookmarked, handleShare
         onPress={() => router.push(`/article/${article.id}`)}
       >
         <View style={styles.imageContainer}>
-          <Image source={{ uri: article.image_url }} style={styles.image} resizeMode="cover" />
+          {/* === arXiv: premium research placeholder === */}
+          {article.image_source_type === 'arxiv_pool' || (!article.image_url && article.article_url?.includes('arxiv.org')) ? (
+            <LinearGradient
+              colors={['#04091a', '#060e22', '#050c1e']}
+              style={[styles.image, styles.arxivPlaceholder]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              {/* Grid lines overlay */}
+              <View style={styles.arxivGrid} pointerEvents="none">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <View key={`h${i}`} style={[styles.arxivGridLine, { top: `${(i + 1) * 11}%` as any }]} />
+                ))}
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <View key={`v${i}`} style={[styles.arxivGridLineV, { left: `${(i + 1) * 14}%` as any }]} />
+                ))}
+              </View>
+              {/* Glowing center badge */}
+              <View style={styles.arxivBadge}>
+                <View style={styles.arxivGlow} />
+                <Text style={styles.arxivSymbol}>∂</Text>
+                <Text style={styles.arxivLabel}>AI RESEARCH PAPER</Text>
+                <Text style={styles.arxivSub}>arXiv Preprint</Text>
+              </View>
+            </LinearGradient>
+
+          ) : article.image_source_type?.includes('pool') || !article.image_url ? (
+            /* === Non-arXiv fallback: source favicon card === */
+            <LinearGradient
+              colors={['#080e1e', '#0a1530', '#06111f']}
+              style={[styles.image, styles.sourcePlaceholder]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.sourceDotGrid}>
+                {Array.from({ length: 30 }).map((_, i) => (
+                  <View key={i} style={[styles.sourceDot, { opacity: 0.05 + (i % 7) * 0.03 }]} />
+                ))}
+              </View>
+              <View style={styles.sourceBrandCenter}>
+                <View style={styles.sourceFaviconContainer}>
+                  <RNImage
+                    source={{ uri: `https://www.google.com/s2/favicons?domain=${article.source_url || article.article_url}&sz=128` }}
+                    style={styles.sourceFavicon}
+                    resizeMode="contain"
+                  />
+                </View>
+                <Text style={styles.sourceNameLabel}>{article.source_name}</Text>
+              </View>
+            </LinearGradient>
+
+          ) : (
+            /* === Real article image — expo-image for caching + fade-in === */
+            <Image
+              source={{ uri: article.thumbnail_url || article.image_url }}
+              style={styles.image}
+              contentFit="cover"
+              transition={250}
+              priority={index < 3 ? 'high' : 'normal'}
+              cachePolicy="memory-disk"
+              placeholder="#080e1e"
+            />
+          )}
+
           <LinearGradient colors={['transparent', 'rgba(2,6,23,0.6)', Colors.background]} style={styles.imageOverlay} />
           {article.is_breaking && (
             <View style={styles.breakingBadge}>
@@ -93,8 +195,8 @@ const ArticleCard = ({ article, index, toggleBookmark, isBookmarked, handleShare
               <TouchableOpacity testID={`share-btn-${index}`} style={styles.actionBtn} onPress={() => handleShare(article)}>
                 <Share2 size={18} color={Colors.textSecondary} strokeWidth={2} />
               </TouchableOpacity>
-              <TouchableOpacity testID={`bookmark-btn-${index}`} style={styles.actionBtn} onPress={() => toggleBookmark(article.id)}>
-                {isBookmarked(article.id) ? (
+              <TouchableOpacity testID={`bookmark-btn-${index}`} style={styles.actionBtn} onPress={() => toggleBookmark(article.id, bookmarked)}>
+                {bookmarked ? (
                   <BookmarkCheck size={18} color={Colors.primary} fill={Colors.primary} />
                 ) : (
                   <Bookmark size={18} color={Colors.textSecondary} strokeWidth={2} />
@@ -120,7 +222,7 @@ const ArticleCard = ({ article, index, toggleBookmark, isBookmarked, handleShare
       </TouchableOpacity>
     </View>
   );
-};
+});
 
 export default function HomeFeed() {
   const [articles, setArticles] = useState<Article[]>([]);
@@ -151,11 +253,11 @@ export default function HomeFeed() {
     }
   };
 
-  const handleShare = async (article: Article) => {
+  const handleShare = useCallback(async (article: Article) => {
     try {
       await Share.share({ message: `${article.title}\n\nRead more on AIBrief24:\n${article.article_url}`, title: article.title });
     } catch { }
-  };
+  }, []);
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     if (viewableItems.length > 0 && viewableItems[0].index !== null) {
@@ -165,26 +267,45 @@ export default function HomeFeed() {
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
 
-  if (loading) {
-    return (
-      <View style={[styles.container, styles.center]}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Loading AI news...</Text>
-      </View>
-    );
-  }
-
-  const renderCard = ({ item: article, index }: { item: Article; index: number }) => (
+  const renderCard = useCallback(({ item: article, index }: { item: Article; index: number }) => (
     <ArticleCard
       article={article}
       index={index}
       toggleBookmark={toggleBookmark}
-      isBookmarked={isBookmarked}
+      bookmarked={isBookmarked(article.id)}
       handleShare={handleShare}
       TAB_BAR_OFFSET={TAB_BAR_OFFSET}
       CARD_HEIGHT={CARD_HEIGHT}
     />
-  );
+  ), [toggleBookmark, isBookmarked, handleShare, TAB_BAR_OFFSET, CARD_HEIGHT]);
+
+  if (loading) {
+    return (
+      <View testID="home-feed" style={styles.container}>
+        {/* Render shell header immediately */}
+        <View style={[styles.header, { paddingTop: insets.top + 12, paddingBottom: 16, height: HEADER_HEIGHT }]}>
+          <View style={styles.headerLeft}>
+            <View style={styles.headerLogoBadge}>
+              <LinearGradient colors={[Colors.primary, Colors.secondary]} style={StyleSheet.absoluteFillObject} />
+              <Text style={styles.headerLogoText}>AI</Text>
+            </View>
+            <View>
+              <Text style={styles.headerTitle}>AIBrief24</Text>
+              <Text style={styles.headerSub}>Fresh AI updates today</Text>
+            </View>
+          </View>
+          <View style={styles.headerBtn}>
+            <Search size={20} color={Colors.textPrimary} strokeWidth={2} />
+          </View>
+        </View>
+
+        {/* Pulsing Skeleton Card */}
+        <AnimatedSkeleton CARD_HEIGHT={CARD_HEIGHT} TAB_BAR_OFFSET={TAB_BAR_OFFSET} />
+      </View>
+    );
+  }
+
+
 
   return (
     <View testID="home-feed" style={styles.container}>
@@ -219,6 +340,10 @@ export default function HomeFeed() {
         decelerationRate="fast"
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
+        windowSize={3}
+        initialNumToRender={2}
+        maxToRenderPerBatch={2}
+        removeClippedSubviews={true}
         getItemLayout={(_, index) => ({ length: CARD_HEIGHT, offset: CARD_HEIGHT * index, index })}
         contentContainerStyle={{ paddingBottom: TAB_BAR_OFFSET }}
       />
@@ -289,4 +414,141 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)',
   },
   pageCounterText: { fontSize: 11, color: Colors.textSecondary, fontWeight: '700', letterSpacing: 1 },
+  researchPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  researchDotGrid: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 24,
+    gap: 20,
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  researchDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#4f8ef7',
+  },
+  researchBadgeCenter: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  researchSymbol: {
+    fontSize: 52,
+    color: 'rgba(79,142,247,0.5)',
+    fontWeight: '200',
+  },
+  researchLabel: {
+    fontSize: 10,
+    color: 'rgba(79,142,247,0.6)',
+    letterSpacing: 3,
+    fontWeight: '700',
+  },
+  // ─── Source-branded fallback card ───────────────────────────────────────────
+  sourcePlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  sourceDotGrid: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 16,
+    gap: 18,
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  sourceDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: '#3a7bd5',
+  },
+  sourceBrandCenter: {
+    alignItems: 'center',
+    gap: 14,
+  },
+  sourceFaviconContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 12,
+  },
+  sourceFavicon: {
+    width: 48,
+    height: 48,
+  },
+  sourceNameLabel: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.45)',
+    letterSpacing: 2.5,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  // ─── arXiv premium research placeholder ──────────────────────────────────
+  arxivPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  arxivGrid: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+  },
+  arxivGridLine: {
+    position: 'absolute',
+    left: 0, right: 0,
+    height: 1,
+    backgroundColor: 'rgba(59,130,246,0.06)',
+  },
+  arxivGridLineV: {
+    position: 'absolute',
+    top: 0, bottom: 0,
+    width: 1,
+    backgroundColor: 'rgba(59,130,246,0.06)',
+  },
+  arxivBadge: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  arxivGlow: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(59,130,246,0.08)',
+    top: -30,
+  },
+  arxivSymbol: {
+    fontSize: 52,
+    color: 'rgba(99,155,255,0.55)',
+    fontWeight: '300',
+    lineHeight: 60,
+  },
+  arxivLabel: {
+    fontSize: 10,
+    color: 'rgba(147,197,253,0.5)',
+    letterSpacing: 3,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  arxivSub: {
+    fontSize: 9,
+    color: 'rgba(147,197,253,0.28)',
+    letterSpacing: 1.5,
+    fontWeight: '500',
+  },
 });

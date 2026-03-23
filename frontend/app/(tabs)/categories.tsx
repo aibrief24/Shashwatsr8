@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Platform, ScrollView } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '@/services/api';
@@ -69,7 +70,7 @@ export default function CategoriesScreen() {
           contentContainerStyle={styles.listContent}
           renderItem={({ item }) => (
             <TouchableOpacity testID={`cat-article-${item.id}`} style={styles.articleCard} onPress={() => router.push(`/article/${item.id}` as any)} activeOpacity={0.8}>
-              <Image source={{ uri: item.image_url }} style={styles.articleImage} />
+              <Image source={{ uri: item.thumbnail_url || item.image_url }} style={styles.articleImage} contentFit="cover" transition={200} cachePolicy="memory-disk" placeholder="#080e1e" />
               <View style={styles.articleInfo}>
                 <Text style={styles.articleTitle} numberOfLines={2}>{item.title}</Text>
                 <Text style={styles.articleSource}>{item.source_name}</Text>
