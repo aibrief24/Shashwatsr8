@@ -19,9 +19,13 @@ interface AuthState {
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   completeOnboarding: () => Promise<void>;
-  toggleBookmark: (articleId: string, isCurrentlyBookmarked: boolean) => Promise<void>;
+  toggleBookmark: (article: any, isCurrentlyBookmarked: boolean) => Promise<void>;
   isBookmarked: (articleId: string) => boolean;
   refreshBookmarks: () => Promise<void>;
+  bookmarkedArticlesCache: any[];
+  setBookmarkedArticlesCache: React.Dispatch<React.SetStateAction<any[]>>;
+  feedArticlesCache: any[];
+  setFeedArticlesCache: React.Dispatch<React.SetStateAction<any[]>>;
 }
 
 const AuthContext = createContext<AuthState>({} as AuthState);
@@ -32,6 +36,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [hasOnboarded, setHasOnboarded] = useState(false);
   const [bookmarkIds, setBookmarkIds] = useState<string[]>([]);
+  const [bookmarkedArticlesCache, setBookmarkedArticlesCache] = useState<any[]>([]);
+  const [feedArticlesCache, setFeedArticlesCache] = useState<any[]>([]);
 
   useEffect(() => {
     loadSession();
@@ -162,14 +168,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.setItem('has_onboarded', 'true');
   };
 
-  const toggleBookmark = useCallback(async (articleId: string, isCurrentlyBookmarked: boolean) => {
+  const toggleBookmark = useCallback(async (article: any, isCurrentlyBookmarked: boolean) => {
     if (!token) return;
+
+    // Fallback for when ID is passed directly instead of the full object
+    const articleId = typeof article === 'string' ? article : article.id;
+    const fullArticle = typeof article === 'string' ? null : article;
+
+    // Optimistic UI updates
     if (isCurrentlyBookmarked) {
       setBookmarkIds(prev => prev.filter(id => id !== articleId));
-      await api.removeBookmark(token, articleId);
+      setBookmarkedArticlesCache(prev => prev.filter(a => a.id !== articleId));
     } else {
       setBookmarkIds(prev => [...prev, articleId]);
-      await api.addBookmark(token, articleId);
+      if (fullArticle) {
+        setBookmarkedArticlesCache(prev => [fullArticle, ...prev]);
+      }
+    }
+
+    // Background sync with fallback rollback on failure
+    try {
+      if (isCurrentlyBookmarked) {
+        await api.removeBookmark(token, articleId);
+      } else {
+        await api.addBookmark(token, articleId);
+      }
+    } catch {
+      // Rollback on network failure
+      if (isCurrentlyBookmarked) {
+        setBookmarkIds(prev => [...prev, articleId]);
+      } else {
+        setBookmarkIds(prev => prev.filter(id => id !== articleId));
+      }
     }
   }, [token]);
 
@@ -186,7 +216,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [token]);
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, hasOnboarded, bookmarkIds, login, signup, logout, forgotPassword, completeOnboarding, toggleBookmark, isBookmarked, refreshBookmarks }}>
+    <AuthContext.Provider value={{ user, token, loading, hasOnboarded, bookmarkIds, bookmarkedArticlesCache, setBookmarkedArticlesCache, feedArticlesCache, setFeedArticlesCache, login, signup, logout, forgotPassword, completeOnboarding, toggleBookmark, isBookmarked, refreshBookmarks }}>
       {children}
     </AuthContext.Provider>
   );

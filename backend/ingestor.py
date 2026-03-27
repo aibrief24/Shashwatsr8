@@ -272,14 +272,14 @@ def _generate_summary(title: str, content: str) -> str:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a premium AI news summarizer. Write exactly 3 to 4 full sentences that are detailed, informative, and highly readable. The summary should provide enough context for a feed card, but remain concise and natural. Never write just one or two short sentences. Keep it factual, engaging, and free of fluff or markdown.",
+                    "content": "You are a concise AI news summarizer. Write 2-3 clear, informative sentences. No fluff, no markdown.",
                 },
                 {
                     "role": "user",
-                    "content": f"Summarize the following:\n\nTitle: {title}\n\nContent: {content[:3000]}",
+                    "content": f"Summarize:\n\nTitle: {title}\n\nContent: {content[:3000]}",
                 },
             ],
-            max_tokens=250,
+            max_tokens=150,
             temperature=0.4,
         )
         return resp.choices[0].message.content.strip()

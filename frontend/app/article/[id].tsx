@@ -81,7 +81,7 @@ export default function ArticleDetail() {
               <TouchableOpacity testID="article-share-btn" style={styles.topBtn} onPress={handleShare}>
                 <Share2 size={20} color="#fff" strokeWidth={1.5} />
               </TouchableOpacity>
-              <TouchableOpacity testID="article-bookmark-btn" style={styles.topBtn} onPress={() => toggleBookmark(article.id, bookmarked)}>
+              <TouchableOpacity testID="article-bookmark-btn" style={styles.topBtn} onPress={() => toggleBookmark(article, bookmarked)}>
                 {bookmarked ? <BookmarkCheck size={20} color={Colors.primary} fill={Colors.primary} /> : <Bookmark size={20} color="#fff" strokeWidth={1.5} />}
               </TouchableOpacity>
             </View>

@@ -195,7 +195,7 @@ const ArticleCard = React.memo(({ article, index, toggleBookmark, bookmarked, ha
               <TouchableOpacity testID={`share-btn-${index}`} style={styles.actionBtn} onPress={() => handleShare(article)}>
                 <Share2 size={18} color={Colors.textSecondary} strokeWidth={2} />
               </TouchableOpacity>
-              <TouchableOpacity testID={`bookmark-btn-${index}`} style={styles.actionBtn} onPress={() => toggleBookmark(article.id, bookmarked)}>
+              <TouchableOpacity testID={`bookmark-btn-${index}`} style={styles.actionBtn} onPress={() => toggleBookmark(article, bookmarked)}>
                 {bookmarked ? (
                   <BookmarkCheck size={18} color={Colors.primary} fill={Colors.primary} />
                 ) : (
@@ -228,7 +228,7 @@ export default function HomeFeed() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const { token, toggleBookmark, isBookmarked } = useAuth();
+  const { token, toggleBookmark, isBookmarked, setFeedArticlesCache } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
@@ -245,7 +245,9 @@ export default function HomeFeed() {
   const loadArticles = async () => {
     try {
       const res = await api.getArticles();
-      setArticles(res.articles || []);
+      const loaded = res.articles || [];
+      setArticles(loaded);
+      setFeedArticlesCache(loaded);
     } catch (e) {
       console.log('Failed to load articles:', e);
     } finally {

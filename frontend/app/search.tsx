@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Image, Platform, Keyboard } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/services/api';
 import { Colors, FontSize, Radius } from '@/constants/theme';
 import { ArrowLeft, Search, X, Clock } from 'lucide-react-native';
@@ -15,30 +16,78 @@ function timeAgo(dateStr: string): string {
 
 export default function SearchScreen() {
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
   const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { feedArticlesCache } = useAuth();
+  const debounceTimer = useRef<any>(null);
 
-  const handleSearch = async () => {
-    if (!query.trim()) return;
-    Keyboard.dismiss();
-    setLoading(true);
-    setSearched(true);
-    try {
-      const res = await api.searchArticles(query.trim());
-      setResults(res.articles || []);
-    } catch {} finally { setLoading(false); }
-  };
+  // Debounce user input, but show instant local memory matches
+  useEffect(() => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+
+    if (!query.trim()) {
+      setDebouncedQuery('');
+      setResults([]);
+      setSearched(false);
+      return;
+    }
+
+    // Instant local cache filter (0ms latency UI)
+    const lowerQuery = query.toLowerCase();
+    const localMatches = feedArticlesCache.filter((a: any) =>
+      a.title.toLowerCase().includes(lowerQuery) ||
+      a.category.toLowerCase().includes(lowerQuery)
+    );
+    if (localMatches.length > 0) {
+      setResults(localMatches);
+      setSearched(true);
+    }
+
+    // Defer heavy API call by 400ms
+    debounceTimer.current = setTimeout(() => {
+      setDebouncedQuery(query.trim());
+    }, 400);
+
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, [query, feedArticlesCache]);
+
+  // Fire network request only when debounced query settles
+  useEffect(() => {
+    const fetchResults = async () => {
+      if (!debouncedQuery) return;
+      setLoading(true);
+      setSearched(true);
+      try {
+        const res = await api.searchArticles(debouncedQuery);
+        setResults(res.articles || []);
+      } catch { } finally {
+        setLoading(false);
+      }
+    };
+    fetchResults();
+  }, [debouncedQuery]);
 
   const clearSearch = () => {
     setQuery('');
+    setDebouncedQuery('');
     setResults([]);
     setSearched(false);
   };
 
-  const SUGGESTIONS = ['OpenAI', 'GPT-5', 'AI Funding', 'Anthropic', 'Open Source', 'NVIDIA', 'Cursor'];
+  const handleChipPress = (s: string) => {
+    setQuery(s);
+    setDebouncedQuery(s); // BYPASS DEBOUNCE - instagrab from API 
+    setSearched(true);
+    setLoading(true);
+  };
+
+  const SUGGESTIONS = ['OpenAI', 'GPT-5', 'General AI', 'Anthropic', 'Open Source', 'NVIDIA', 'LLM'];
 
   return (
     <View testID="search-screen" style={[styles.container, { paddingTop: insets.top }]}>
@@ -56,7 +105,6 @@ export default function SearchScreen() {
             placeholderTextColor={Colors.textTertiary}
             value={query}
             onChangeText={setQuery}
-            onSubmitEditing={handleSearch}
             returnKeyType="search"
             autoFocus
           />
@@ -74,7 +122,7 @@ export default function SearchScreen() {
           <Text style={styles.sugTitle}>Trending Searches</Text>
           <View style={styles.sugGrid}>
             {SUGGESTIONS.map(s => (
-              <TouchableOpacity testID={`suggestion-${s}`} key={s} style={styles.sugChip} onPress={() => { setQuery(s); }}>
+              <TouchableOpacity testID={`suggestion-${s}`} key={s} style={styles.sugChip} onPress={() => handleChipPress(s)}>
                 <Text style={styles.sugChipText}>{s}</Text>
               </TouchableOpacity>
             ))}

@@ -15,33 +15,36 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function BookmarksScreen() {
-  const [articles, setArticles] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const { token, toggleBookmark, bookmarkIds } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const { token, toggleBookmark, bookmarkIds, bookmarkedArticlesCache, setBookmarkedArticlesCache } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
   const loadBookmarks = useCallback(async () => {
-    if (!token) { setLoading(false); return; }
+    if (!token) return;
+    // If the cache already has all bookmarked articles, do not refetch
+    if (bookmarkedArticlesCache.length >= bookmarkIds.length && bookmarkIds.length > 0) return;
+
+    setLoading(true);
     try {
       const res = await api.getBookmarks(token);
-      setArticles(res.bookmarks || []);
+      setBookmarkedArticlesCache(res.bookmarks || []);
     } catch { } finally { setLoading(false); }
-  }, [token]);
+  }, [token, bookmarkIds.length, bookmarkedArticlesCache.length]);
 
-  useEffect(() => { loadBookmarks(); }, [bookmarkIds]);
+  useEffect(() => { loadBookmarks(); }, [loadBookmarks]);
 
   const handleRemove = async (id: string) => {
     await toggleBookmark(id, true);
-    setArticles(prev => prev.filter(a => a.id !== id));
+    // Context cache will auto-update optimistically 
   };
 
   return (
     <View testID="bookmarks-screen" style={[styles.container, { paddingTop: insets.top }]}>
       <Text style={styles.pageTitle}>Saved Articles</Text>
-      <Text style={styles.pageSubtitle}>{articles.length} bookmarked for later</Text>
+      <Text style={styles.pageSubtitle}>{bookmarkedArticlesCache.length} bookmarked for later</Text>
       <FlatList
-        data={articles}
+        data={bookmarkedArticlesCache}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.list}
         renderItem={({ item }) => (
