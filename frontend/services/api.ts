@@ -1,4 +1,6 @@
-const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+const BASE_URL =
+  process.env.EXPO_PUBLIC_BACKEND_URL ||
+  'https://aibrief24-backend.onrender.com';
 
 async function request(path: string, options: RequestInit = {}) {
   const url = `${BASE_URL}/api${path}`;
