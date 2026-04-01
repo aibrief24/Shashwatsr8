@@ -44,17 +44,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const clearStoredAuth = async () => {
-    await AsyncStorage.multiRemove(['auth_token', 'auth_refresh_token']);
+    try {
+      await AsyncStorage.multiRemove(['auth_token', 'auth_refresh_token']);
+    } catch (e) {
+      console.error('[Perf] Failed to clear auth:', e);
+    }
   };
 
   const loadSession = async () => {
-    console.time('[Perf] App Startup: Session Restore');
+    console.log('[Perf] App Startup: Session Restore init');
     try {
-      const [savedToken, savedRefresh, onboarded] = await Promise.all([
+      // Add a race condition to force load if AsyncStorage hangs
+      const storagePromise = Promise.all([
         AsyncStorage.getItem('auth_token'),
         AsyncStorage.getItem('auth_refresh_token'),
         AsyncStorage.getItem('has_onboarded'),
       ]);
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('AsyncStorage timeout')), 3000)
+      );
+
+      const [savedToken, savedRefresh, onboarded] = await Promise.race([storagePromise, timeoutPromise]) as any;
 
       setHasOnboarded(onboarded === 'true');
 
@@ -108,9 +119,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         })();
       }
-    } catch {
+    } catch (e) {
+      console.error('[Perf] Auth Restore Error:', e);
       await clearStoredAuth();
     } finally {
+      console.log('[Perf] Session restore complete. Setting loading=false');
       setLoading(false);
     }
   };
