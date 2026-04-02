@@ -74,21 +74,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setToken(savedToken);
         setUser({ id: 'temp', email: '', name: 'User' }); // placeholder until network sync
 
-        console.timeEnd('[Perf] App Startup: Session Restore');
+        console.log('[Perf] App Startup: Session Restore End');
 
         // Background network sync
         ; (async () => {
-          console.time('[Perf] Background User Sync');
+          console.log('[Perf] Background User Sync');
           try {
             const userData = await api.getMe(savedToken);
             setUser(userData);
-            console.timeEnd('[Perf] Background User Sync');
+            console.log('[Perf] Background User Sync End');
 
             try {
-              console.time('[Perf] Background Bookmark Sync');
+              console.log('[Perf] Background Bookmark Sync');
               const bm = await api.getBookmarkIds(savedToken);
               setBookmarkIds(bm.ids || []);
-              console.timeEnd('[Perf] Background Bookmark Sync');
+              console.log('[Perf] Background Bookmark Sync End');
             } catch { }
           } catch {
             // Token expired — try refresh silently
@@ -129,7 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const login = async (email: string, password: string) => {
-    console.time('[Perf] Login Request Lifecycle');
+    console.log('[Perf] Login Request Lifecycle');
     const res = await api.login(email, password);
     const accessToken = res.access_token;
     if (!accessToken) throw new Error('Login failed: no token returned');
@@ -139,12 +139,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.setItem('auth_token', accessToken);
     if (res.refresh_token) await AsyncStorage.setItem('auth_refresh_token', res.refresh_token);
 
-    console.timeEnd('[Perf] Login Request Lifecycle');
+    console.log('[Perf] Login Request Lifecycle End');
 
     // Background fetch (non-blocking)
-    console.time('[Perf] Post-Login Background Bookmarks');
+    console.log('[Perf] Post-Login Background Bookmarks');
     api.getBookmarkIds(accessToken)
-      .then(bm => { setBookmarkIds(bm.ids || []); console.timeEnd('[Perf] Post-Login Background Bookmarks'); })
+      .then(bm => { setBookmarkIds(bm.ids || []); console.log('[Perf] Post-Login Background Bookmarks End'); })
       .catch(() => { });
   };
 
