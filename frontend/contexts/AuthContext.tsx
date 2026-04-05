@@ -115,27 +115,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [token, user?.id]);
 
   const login = async (email: string, password: string) => {
-    console.log('[Perf] Login Request Lifecycle');
-    const loginPromise = api.login(email, password);
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Login timeout')), 10000));
-    const res = await Promise.race([loginPromise, timeoutPromise]) as any;
+    try {
+      console.log('[LOGIN] before api.login');
 
-    const accessToken = res.access_token;
-    if (!accessToken) throw new Error('Login failed: no token returned');
+      const loginPromise = api.login(email, password);
+      // ONLY apply timeout to api.login
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Login timeout')), 15000)
+      );
+      const res = await Promise.race([loginPromise, timeoutPromise]) as any;
 
-    setToken(accessToken);
-    setUser(res.user);
+      console.log('[LOGIN] after api.login response');
 
-    // Fast isolated persistence
-    Promise.race([
-      Promise.all([
-        AsyncStorage.setItem('auth_token', accessToken),
-        res.refresh_token ? AsyncStorage.setItem('auth_refresh_token', res.refresh_token) : Promise.resolve(),
-      ]),
-      new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 2000))
-    ]).catch(() => { });
+      const accessToken = res.access_token;
+      if (!accessToken) throw new Error('Login failed: no token returned');
 
-    console.log('[Perf] Login Request Lifecycle End');
+      console.log('[LOGIN] before AsyncStorage save');
+      // Timeout wrapper around AsyncStorage to prevent silent UX freezes on Android
+      await Promise.race([
+        Promise.all([
+          AsyncStorage.setItem('auth_token', accessToken),
+          res.refresh_token ? AsyncStorage.setItem('auth_refresh_token', res.refresh_token) : Promise.resolve(),
+        ]),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('AsyncStorage timeout')), 2000))
+      ]).catch(e => console.warn('[LOGIN] AsyncStorage warning:', e));
+      console.log('[LOGIN] after AsyncStorage save');
+
+      console.log('[LOGIN] before token/user state set');
+      setToken(accessToken);
+      setUser(res.user);
+      console.log('[LOGIN] after token/user state set');
+
+      console.log('[LOGIN] before post-login sync');
+      // Post-sync is detached automatically by our useEffects (syncUser/syncBookmarks)
+      // reacting to the token/user state mutations safely in the background.
+
+    } catch (error: any) {
+      console.error('[LOGIN ERROR]', error);
+      throw error;
+    }
   };
 
   const signup = async (email: string, password: string, name: string): Promise<{ needsConfirmation?: boolean }> => {
