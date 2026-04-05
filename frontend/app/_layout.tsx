@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
+import { Platform, InteractionManager } from 'react-native';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { Colors } from '@/constants/theme';
 import { useRouter } from 'expo-router';
@@ -77,31 +77,31 @@ function AppContent() {
   const router = useRouter();
 
   useEffect(() => {
-    console.log('[Startup] AppContent mounted, loading:', loading);
-    if (!loading) {
-      console.log('[Startup] Loading complete, preparing to hide splash screen');
-      // Delay to prevent Android race condition with expo-router <Redirect>
-      const timer = setTimeout(async () => {
-        try {
-          await SplashScreen.hideAsync();
-          console.log('[Startup] Splash screen successfully hidden');
-        } catch (e) {
-          console.error('[Startup] Splash screen hide failed:', e);
-        }
-      }, 200);
-      return () => clearTimeout(timer);
-    }
-  }, [loading]);
+    console.log('[Startup] AppContent mounted, setting 800ms timer to hide splash');
+    const timer = setTimeout(async () => {
+      try {
+        await SplashScreen.hideAsync();
+        console.log('[Startup] Splash screen successfully hidden');
+      } catch (e) {
+        console.error('[Startup] Splash screen hide failed:', e);
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (user?.id) {
-      registerForPushNotificationsAsync().then((token) => {
-        if (token) {
-          api.registerPushToken(token, Platform.OS)
-            .then(() => console.log('Token registered on backend'))
-            .catch(e => console.error('Token register error:', e));
-        }
-      });
+      // Delay push registration slightly after login so it never blocks startup
+      const timer = setTimeout(() => {
+        registerForPushNotificationsAsync().then((token) => {
+          if (token) {
+            api.registerPushToken(token, Platform.OS)
+              .then(() => console.log('Token registered on backend'))
+              .catch(e => console.error('Token register error:', e));
+          }
+        });
+      }, 2000);
+      return () => clearTimeout(timer);
     }
   }, [user?.id]);
 

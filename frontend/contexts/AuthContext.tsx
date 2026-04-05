@@ -72,52 +72,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (savedToken) {
         // Optimistically trust local token to unblock splash immediately
         setToken(savedToken);
-        setUser({ id: 'temp', email: '', name: 'User' }); // placeholder until network sync
-
-        console.log('[Perf] App Startup: Session Restore End');
-
-        // Background network sync
-        ; (async () => {
-          console.log('[Perf] Background User Sync');
-          try {
-            const userData = await api.getMe(savedToken);
-            setUser(userData);
-            console.log('[Perf] Background User Sync End');
-
-            try {
-              console.log('[Perf] Background Bookmark Sync');
-              const bm = await api.getBookmarkIds(savedToken);
-              setBookmarkIds(bm.ids || []);
-              console.log('[Perf] Background Bookmark Sync End');
-            } catch { }
-          } catch {
-            // Token expired — try refresh silently
-            if (savedRefresh) {
-              try {
-                const refreshRes = await api.refreshToken(savedRefresh);
-                const newToken = refreshRes.access_token;
-                const newRefresh = refreshRes.refresh_token;
-                if (newToken) {
-                  await AsyncStorage.setItem('auth_token', newToken);
-                  if (newRefresh) await AsyncStorage.setItem('auth_refresh_token', newRefresh);
-                  setToken(newToken);
-                  const userData = await api.getMe(newToken);
-                  setUser(userData);
-                  try {
-                    const bm = await api.getBookmarkIds(newToken);
-                    setBookmarkIds(bm.ids || []);
-                  } catch { }
-                } else {
-                  await logout();
-                }
-              } catch {
-                await logout();
-              }
-            } else {
-              await logout();
-            }
-          }
-        })();
       }
     } catch (e) {
       console.error('[Perf] Auth Restore Error:', e);
@@ -128,48 +82,90 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Delayed User Sync Effect
+  useEffect(() => {
+    if (token && !user) {
+      const syncUser = async () => {
+        try {
+          const userData = await api.getMe(token);
+          setUser(userData);
+        } catch (e) {
+          console.log('[Perf] Background User Sync Failed for now');
+        }
+      };
+      const timer = setTimeout(syncUser, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [token, user]);
+
+  // Delayed Bookmark Sync Effect
+  useEffect(() => {
+    if (token && user?.id) {
+      const syncBookmarks = async () => {
+        try {
+          const bm = await api.getBookmarkIds(token);
+          setBookmarkIds(bm.ids || []);
+        } catch (e) {
+          console.log('[Perf] Background Bookmark Sync Failed');
+        }
+      };
+      const timer = setTimeout(syncBookmarks, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [token, user?.id]);
+
   const login = async (email: string, password: string) => {
     console.log('[Perf] Login Request Lifecycle');
-    const res = await api.login(email, password);
+    const loginPromise = api.login(email, password);
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Login timeout')), 10000));
+    const res = await Promise.race([loginPromise, timeoutPromise]) as any;
+
     const accessToken = res.access_token;
     if (!accessToken) throw new Error('Login failed: no token returned');
 
-    setUser(res.user);
     setToken(accessToken);
-    await AsyncStorage.setItem('auth_token', accessToken);
-    if (res.refresh_token) await AsyncStorage.setItem('auth_refresh_token', res.refresh_token);
+    setUser(res.user);
+
+    // Fast isolated persistence
+    Promise.race([
+      Promise.all([
+        AsyncStorage.setItem('auth_token', accessToken),
+        res.refresh_token ? AsyncStorage.setItem('auth_refresh_token', res.refresh_token) : Promise.resolve(),
+      ]),
+      new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 2000))
+    ]).catch(() => { });
 
     console.log('[Perf] Login Request Lifecycle End');
-
-    // Background fetch (non-blocking)
-    console.log('[Perf] Post-Login Background Bookmarks');
-    api.getBookmarkIds(accessToken)
-      .then(bm => { setBookmarkIds(bm.ids || []); console.log('[Perf] Post-Login Background Bookmarks End'); })
-      .catch(() => { });
   };
 
   const signup = async (email: string, password: string, name: string): Promise<{ needsConfirmation?: boolean }> => {
-    const res = await api.signup(email, password, name);
+    const signupPromise = api.signup(email, password, name);
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Signup timeout')), 10000));
+    const res = await Promise.race([signupPromise, timeoutPromise]) as any;
+
     const accessToken = res.access_token;
     if (accessToken) {
       setUser(res.user);
       setToken(accessToken);
-      await AsyncStorage.setItem('auth_token', accessToken);
-      if (res.refresh_token) await AsyncStorage.setItem('auth_refresh_token', res.refresh_token);
+      Promise.race([
+        Promise.all([
+          AsyncStorage.setItem('auth_token', accessToken),
+          res.refresh_token ? AsyncStorage.setItem('auth_refresh_token', res.refresh_token) : Promise.resolve(),
+        ]),
+        new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 2000))
+      ]).catch(() => { });
       return { needsConfirmation: false };
     }
-    // Email confirmation required — Supabase returned user but no session
     return { needsConfirmation: true };
   };
 
   const logout = async () => {
-    try {
-      if (token) await api.logout(token);
-    } catch { }
     setUser(null);
     setToken(null);
     setBookmarkIds([]);
-    await clearStoredAuth();
+    // Fire and forget, no unhandled rejections
+    if (token) api.logout(token).catch(() => { });
+    clearStoredAuth().catch(() => { });
   };
 
   const forgotPassword = async (email: string) => {

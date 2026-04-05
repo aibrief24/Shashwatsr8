@@ -1,18 +1,33 @@
 import { Redirect } from 'expo-router';
-import { View } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect } from 'react';
 
 export default function SplashEntry() {
-  const { loading, hasOnboarded, user } = useAuth();
+  const { loading, hasOnboarded, token, user } = useAuth();
 
   useEffect(() => {
-    console.log(`[Startup Router] Index evaluated. loading=${loading}, onboarded=${hasOnboarded}, user=${user?.id}`);
-  }, [loading, hasOnboarded, user]);
+    console.log(
+      `[Startup Router] loading=${loading}, onboarded=${hasOnboarded}, token=${!!token}, user=${user?.id}`
+    );
+  }, [loading, hasOnboarded, token, user]);
 
-  if (loading) return <View style={{ flex: 1, backgroundColor: '#020617' }} />;
+  if (loading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: '#020617',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <ActivityIndicator size="small" color="#ffffff" />
+      </View>
+    );
+  }
+
   if (!hasOnboarded) return <Redirect href="/onboarding" />;
-  if (!user) return <Redirect href="/login" />;
-
+  if (!token) return <Redirect href="/login" />;
   return <Redirect href="/(tabs)" />;
 }
