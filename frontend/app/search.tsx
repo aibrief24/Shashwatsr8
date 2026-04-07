@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Image, Platform, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Platform, Keyboard } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,7 +26,7 @@ export default function SearchScreen() {
   const { feedArticlesCache } = useAuth();
   const debounceTimer = useRef<any>(null);
 
-  // Debounce user input, but show instant local memory matches
+  // Debounce user input completely to avoid breaking keyboard performance
   useEffect(() => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
 
@@ -36,20 +37,18 @@ export default function SearchScreen() {
       return;
     }
 
-    // Instant local cache filter (0ms latency UI)
-    const lowerQuery = query.toLowerCase();
-    const localMatches = feedArticlesCache.filter((a: any) =>
-      a.title.toLowerCase().includes(lowerQuery) ||
-      a.category.toLowerCase().includes(lowerQuery)
-    );
-    if (localMatches.length > 0) {
-      setResults(localMatches);
-      setSearched(true);
-    }
-
-    // Defer heavy API call by 400ms
+    // Delay everything (both memory filter and API string setting) to preserve 60FPS typing
     debounceTimer.current = setTimeout(() => {
-      setDebouncedQuery(query.trim());
+      const lowerQuery = query.toLowerCase().trim();
+      const localMatches = feedArticlesCache.filter((a: any) =>
+        a.title.toLowerCase().includes(lowerQuery) ||
+        a.category.toLowerCase().includes(lowerQuery)
+      );
+      if (localMatches.length > 0) {
+        setResults(localMatches);
+        setSearched(true);
+      }
+      setDebouncedQuery(lowerQuery);
     }, 400);
 
     return () => {
@@ -138,7 +137,7 @@ export default function SearchScreen() {
           contentContainerStyle={styles.resultsList}
           renderItem={({ item }) => (
             <TouchableOpacity testID={`search-result-${item.id}`} style={styles.resultCard} onPress={() => router.push(`/article/${item.id}` as any)} activeOpacity={0.8}>
-              <Image source={{ uri: item.image_url }} style={styles.resultImage} />
+              <Image source={{ uri: item.image_url }} style={styles.resultImage} contentFit="cover" transition={200} cachePolicy="memory-disk" placeholder="#080e1e" />
               <View style={styles.resultBody}>
                 <Text style={styles.resultCategory}>{item.category}</Text>
                 <Text style={styles.resultTitle} numberOfLines={2}>{item.title}</Text>

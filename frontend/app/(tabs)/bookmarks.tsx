@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Platform } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
@@ -49,7 +50,7 @@ export default function BookmarksScreen() {
         contentContainerStyle={styles.list}
         renderItem={({ item }) => (
           <TouchableOpacity testID={`saved-article-${item.id}`} style={styles.card} onPress={() => router.push(`/article/${item.id}` as any)} activeOpacity={0.8}>
-            <Image source={{ uri: item.image_url }} style={styles.cardImage} />
+            <Image source={{ uri: item.image_url }} style={styles.cardImage} contentFit="cover" transition={200} cachePolicy="memory-disk" placeholder="#080e1e" />
             <View style={styles.cardBody}>
               <Text style={styles.cardCategory}>{item.category}</Text>
               <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>

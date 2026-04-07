@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Platform, ScrollView, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -32,6 +32,7 @@ export default function CategoriesScreen() {
   const [selectedCat, setSelectedCat] = useState<string | null>(null);
   const [articles, setArticles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [catLoading, setCatLoading] = useState(false);
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -46,12 +47,19 @@ export default function CategoriesScreen() {
     } catch { } finally { setLoading(false); }
   };
 
-  const selectCategory = async (name: string) => {
+  const selectCategory = (name: string) => {
     setSelectedCat(name);
-    try {
-      const res = await api.getArticles(name);
-      setArticles(res.articles || []);
-    } catch { }
+    setArticles([]);
+    setCatLoading(true);
+    // Defer API to unblock rapid UI navigation flashes
+    setTimeout(async () => {
+      try {
+        const res = await api.getArticles(name);
+        setArticles(res.articles || []);
+      } catch { } finally {
+        setCatLoading(false);
+      }
+    }, 50);
   };
 
   if (selectedCat) {
@@ -64,21 +72,27 @@ export default function CategoriesScreen() {
           <Text style={styles.catTitle}>{selectedCat}</Text>
           <Text style={styles.catCount}>{articles.length} stories</Text>
         </View>
-        <FlatList
-          data={articles}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => (
-            <TouchableOpacity testID={`cat-article-${item.id}`} style={styles.articleCard} onPress={() => router.push(`/article/${item.id}` as any)} activeOpacity={0.8}>
-              <Image source={{ uri: item.thumbnail_url || item.image_url }} style={styles.articleImage} contentFit="cover" transition={200} cachePolicy="memory-disk" placeholder="#080e1e" />
-              <View style={styles.articleInfo}>
-                <Text style={styles.articleTitle} numberOfLines={2}>{item.title}</Text>
-                <Text style={styles.articleSource}>{item.source_name}</Text>
-              </View>
-            </TouchableOpacity>
-          )}
-          ListEmptyComponent={<Text style={styles.emptyText}>No articles in this category</Text>}
-        />
+        {catLoading ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ActivityIndicator color={Colors.primary} size="large" />
+          </View>
+        ) : (
+          <FlatList
+            data={articles}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.listContent}
+            renderItem={({ item }) => (
+              <TouchableOpacity testID={`cat-article-${item.id}`} style={styles.articleCard} onPress={() => router.push(`/article/${item.id}` as any)} activeOpacity={0.8}>
+                <Image source={{ uri: item.thumbnail_url || item.image_url }} style={styles.articleImage} contentFit="cover" transition={200} cachePolicy="memory-disk" placeholder="#080e1e" />
+                <View style={styles.articleInfo}>
+                  <Text style={styles.articleTitle} numberOfLines={2}>{item.title}</Text>
+                  <Text style={styles.articleSource}>{item.source_name}</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+            ListEmptyComponent={<Text style={styles.emptyText}>No articles in this category</Text>}
+          />
+        )}
       </View>
     );
   }
