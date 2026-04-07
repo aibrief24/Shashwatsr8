@@ -2,20 +2,53 @@ const BASE_URL =
   process.env.EXPO_PUBLIC_BACKEND_URL ||
   'https://aibrief24-backend.onrender.com';
 
-async function request(path: string, options: RequestInit = {}) {
+async function request(path: string, options: RequestInit = {}, timeoutMs = 30000) {
   const url = `${BASE_URL}/api${path}`;
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: 'Request failed' }));
-    throw new Error(err.detail || `HTTP ${res.status}`);
+  console.log(`[API] => START ${options.method || 'GET'} ${url}`);
+
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(url, {
+      ...options,
+      signal: controller.signal as any,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
+    clearTimeout(id);
+
+    console.log(`[API] <= FINISH ${options.method || 'GET'} ${url} [${res.status}]`);
+
+    if (!res.ok) {
+      let errDetail = 'Request failed';
+      try {
+        const errJson = await res.json();
+        errDetail = errJson.detail || errDetail;
+      } catch (e) {
+        errDetail = `Non-200 response (${res.status}) and failed to parse error JSON`;
+      }
+      throw new Error(errDetail);
+    }
+
+    try {
+      return await res.json();
+    } catch (e) {
+      throw new Error('Failed to parse JSON response from server');
+    }
+  } catch (error: any) {
+    clearTimeout(id);
+    console.log(`[API] <= ERROR ${options.method || 'GET'} ${url}: `, error.message);
+    if (error.name === 'AbortError') {
+      throw new Error(`Network request timed out after ${timeoutMs / 1000}s. Please check your connection or wait for server cold start.`);
+    }
+    if (error.message === 'Network request failed') {
+      throw new Error('Network failure: Unable to reach the server. Are you online?');
+    }
+    throw error;
   }
-  return res.json();
 }
 
 function authHeaders(token: string) {
@@ -43,7 +76,7 @@ export const api = {
     request('/auth/reset-password', { method: 'POST', body: JSON.stringify({ email }) }),
 
   // Articles
-  getArticles: (category?: string, limit = 50, offset = 0) => {
+  getArticles: (category?: string, limit = 15, offset = 0) => {
     const params = new URLSearchParams();
     if (category && category !== 'Latest') params.set('category', category);
     params.set('limit', String(limit));

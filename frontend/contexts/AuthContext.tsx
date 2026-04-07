@@ -118,12 +118,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('[LOGIN] before api.login');
 
-      const loginPromise = api.login(email, password);
-      // ONLY apply timeout to api.login
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Login timeout')), 15000)
-      );
-      const res = await Promise.race([loginPromise, timeoutPromise]) as any;
+      // api.login handles its own internal 30-second AbortController securely
+      const res = await api.login(email, password) as any;
 
       console.log('[LOGIN] after api.login response');
 
