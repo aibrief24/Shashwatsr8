@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Image as RNImage, TouchableOpacity, Platform, Linking, Share, ActivityIndicator, FlatList, ViewToken, useWindowDimensions, LayoutAnimation, UIManager, Animated } from 'react-native';
+import { View, Text, StyleSheet, Image as RNImage, TouchableOpacity, Platform, Linking, Share, ActivityIndicator, FlatList, ViewToken, useWindowDimensions, LayoutAnimation, UIManager, Animated, InteractionManager } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -75,7 +75,22 @@ const AnimatedSkeleton = ({ CARD_HEIGHT, TAB_BAR_OFFSET }: any) => {
   );
 };
 
-const ArticleCard = React.memo(({ article, index, toggleBookmark, bookmarked, handleShare, TAB_BAR_OFFSET, CARD_HEIGHT }: any) => {
+const BookmarkButton = React.memo(({ article }: { article: Article }) => {
+  const { isBookmarked, toggleBookmark } = useAuth();
+  const bookmarked = isBookmarked(article.id);
+
+  return (
+    <TouchableOpacity testID={`bookmark-btn-${article.id}`} style={styles.actionBtn} onPress={() => toggleBookmark(article, bookmarked)}>
+      {bookmarked ? (
+        <BookmarkCheck size={18} color={Colors.primary} fill={Colors.primary} />
+      ) : (
+        <Bookmark size={18} color={Colors.textSecondary} strokeWidth={2} />
+      )}
+    </TouchableOpacity>
+  );
+});
+
+const ArticleCard = React.memo(({ article, index, handleShare, TAB_BAR_OFFSET, CARD_HEIGHT }: any) => {
   const [expanded, setExpanded] = useState(false);
   const router = useRouter();
 
@@ -195,13 +210,7 @@ const ArticleCard = React.memo(({ article, index, toggleBookmark, bookmarked, ha
               <TouchableOpacity testID={`share-btn-${index}`} style={styles.actionBtn} onPress={() => handleShare(article)}>
                 <Share2 size={18} color={Colors.textSecondary} strokeWidth={2} />
               </TouchableOpacity>
-              <TouchableOpacity testID={`bookmark-btn-${index}`} style={styles.actionBtn} onPress={() => toggleBookmark(article, bookmarked)}>
-                {bookmarked ? (
-                  <BookmarkCheck size={18} color={Colors.primary} fill={Colors.primary} />
-                ) : (
-                  <Bookmark size={18} color={Colors.textSecondary} strokeWidth={2} />
-                )}
-              </TouchableOpacity>
+              <BookmarkButton article={article} />
             </View>
           </View>
 
@@ -228,7 +237,7 @@ export default function HomeFeed() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const { token, toggleBookmark, isBookmarked, setFeedArticlesCache } = useAuth();
+  const { setFeedArticlesCache } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
@@ -239,7 +248,15 @@ export default function HomeFeed() {
   const CARD_HEIGHT = height - HEADER_HEIGHT;
 
   useEffect(() => {
-    loadArticles();
+    console.log('[DEBUG-UI] (tabs)/index.tsx mounted');
+    const task = InteractionManager.runAfterInteractions(() => {
+      console.log('[DEBUG-UI] feed interaction cleared, starting loadArticles()');
+      loadArticles();
+    });
+    return () => {
+      console.log('[DEBUG-UI] (tabs)/index.tsx unmounted');
+      task.cancel();
+    };
   }, []);
 
   const loadArticles = async () => {
@@ -273,13 +290,11 @@ export default function HomeFeed() {
     <ArticleCard
       article={article}
       index={index}
-      toggleBookmark={toggleBookmark}
-      bookmarked={isBookmarked(article.id)}
       handleShare={handleShare}
       TAB_BAR_OFFSET={TAB_BAR_OFFSET}
       CARD_HEIGHT={CARD_HEIGHT}
     />
-  ), [toggleBookmark, isBookmarked, handleShare, TAB_BAR_OFFSET, CARD_HEIGHT]);
+  ), [handleShare, TAB_BAR_OFFSET, CARD_HEIGHT]);
 
   if (loading) {
     return (
@@ -345,7 +360,8 @@ export default function HomeFeed() {
         windowSize={3}
         initialNumToRender={2}
         maxToRenderPerBatch={2}
-        removeClippedSubviews={true}
+        // CRITICAL BUG: removeClippedSubviews on Android is known to hard-crash the UIManager on complex items!
+        removeClippedSubviews={false}
         getItemLayout={(_, index) => ({ length: CARD_HEIGHT, offset: CARD_HEIGHT * index, index })}
         contentContainerStyle={{ paddingBottom: TAB_BAR_OFFSET }}
       />

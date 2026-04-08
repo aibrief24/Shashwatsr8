@@ -90,20 +90,22 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    if (user?.id) {
-      // Delay push registration slightly after login so it never blocks startup
+    if (user?.id && token) {
+      console.log('[DEBUG] Scheduling Push Registration 3 seconds deferred');
       const timer = setTimeout(() => {
-        registerForPushNotificationsAsync().then((token) => {
-          if (token) {
-            api.registerPushToken(token, Platform.OS)
-              .then(() => console.log('Token registered on backend'))
-              .catch(e => console.error('Token register error:', e));
-          }
+        InteractionManager.runAfterInteractions(() => {
+          registerForPushNotificationsAsync().then((pushToken) => {
+            if (pushToken) {
+              api.registerPushToken(pushToken, Platform.OS, token)
+                .then(() => console.log('[DEBUG] Token safely registered on backend'))
+                .catch(e => console.error('[DEBUG] Token register error:', e));
+            }
+          }).catch(err => console.log('[DEBUG] Safe catch of push token generation failure:', err));
         });
-      }, 2000);
+      }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [user?.id]);
+  }, [user?.id, token]);
 
 
   return (

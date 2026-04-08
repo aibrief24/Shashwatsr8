@@ -319,15 +319,18 @@ def get_articles(category: Optional[str] = None, limit: int = 50, offset: int = 
     total = total_rows[0]["cnt"] if total_rows else 0
 
     # ── arXiv curation for home feed ─────────────────────────────────────────
-    # Cap arXiv at MAX_ARXIV items and prevent consecutive arXiv cards
+    # Cap arXiv at MAX_ARXIV items but prevent starving the feed if payload is too thin
     if not category or category == "Latest":
-        MAX_ARXIV = 2
+        MAX_ARXIV = 4
         rows = rows or []
         arxiv_items = [r for r in rows if "arxiv.org" in (r.get("article_url") or "").lower()]
         non_arxiv = [r for r in rows if r not in arxiv_items]
 
-        # Keep only the freshest MAX_ARXIV arXiv papers (already sorted by date)
-        kept_arxiv = arxiv_items[:MAX_ARXIV]
+        # Only strictly clip arxiv items if we have plenty of standard content to form 15 items
+        if len(non_arxiv) + min(len(arxiv_items), MAX_ARXIV) < 15:
+            kept_arxiv = arxiv_items  # Rely on them heavily to backfill the feed target
+        else:
+            kept_arxiv = arxiv_items[:MAX_ARXIV]
 
         # Interleave: place arXiv cards with gaps (never back-to-back)
         curated = []
@@ -336,11 +339,11 @@ def get_articles(category: Optional[str] = None, limit: int = 50, offset: int = 
         for art in non_arxiv:
             curated.append(art)
             gap += 1
-            # Insert an arXiv card every ~4 non-arXiv cards
-            if arxiv_q and gap >= 4:
+            # Insert an arXiv card every ~3 non-arXiv cards
+            if arxiv_q and gap >= 3:
                 curated.append(arxiv_q.pop(0))
                 gap = 0
-        # Append any remaining arXiv at the end (still respects the cap)
+        # Append any remaining arXiv at the end
         curated.extend(arxiv_q)
 
         rows = curated

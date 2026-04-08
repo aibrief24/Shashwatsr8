@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { InteractionManager } from 'react-native';
 import { api } from '@/services/api';
 
 interface User {
@@ -90,10 +91,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const userData = await api.getMe(token);
           setUser(userData);
         } catch (e) {
-          console.log('[Perf] Background User Sync Failed for now');
+          console.log('[Perf] Background User Sync Failed silently');
         }
       };
-      const timer = setTimeout(syncUser, 800);
+      // Defer heavily to avoid blocking initial feed render routines
+      const timer = setTimeout(() => {
+        InteractionManager.runAfterInteractions(syncUser);
+      }, 2500);
       return () => clearTimeout(timer);
     }
   }, [token, user]);
@@ -106,10 +110,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const bm = await api.getBookmarkIds(token);
           setBookmarkIds(bm.ids || []);
         } catch (e) {
-          console.log('[Perf] Background Bookmark Sync Failed');
+          console.log('[Perf] Background Bookmark Sync Failed silently');
         }
       };
-      const timer = setTimeout(syncBookmarks, 1500);
+      // Defer strictly until the UI is entirely idle to avoid jitter
+      const timer = setTimeout(() => {
+        InteractionManager.runAfterInteractions(syncBookmarks);
+      }, 3500);
       return () => clearTimeout(timer);
     }
   }, [token, user?.id]);
@@ -126,18 +133,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const accessToken = res.access_token;
       if (!accessToken) throw new Error('Login failed: no token returned');
 
-      console.log('[LOGIN] before AsyncStorage save');
-      // Timeout wrapper around AsyncStorage to prevent silent UX freezes on Android
-      await Promise.race([
-        Promise.all([
-          AsyncStorage.setItem('auth_token', accessToken),
-          res.refresh_token ? AsyncStorage.setItem('auth_refresh_token', res.refresh_token) : Promise.resolve(),
-        ]),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('AsyncStorage timeout')), 2000))
-      ]).catch(e => console.warn('[LOGIN] AsyncStorage warning:', e));
-      console.log('[LOGIN] after AsyncStorage save');
+      console.log('[LOGIN] before AsyncStorage save (Fire-and-forget)');
+      // Fire-and-forget AsyncStorage to completely prevent UI freezing during login on heavy devices
+      Promise.all([
+        AsyncStorage.setItem('auth_token', accessToken),
+        res.refresh_token ? AsyncStorage.setItem('auth_refresh_token', res.refresh_token) : Promise.resolve(),
+      ]).then(() => console.log('[LOGIN] AsyncStorage sync complete in background'))
+        .catch(e => console.warn('[LOGIN] AsyncStorage warning:', e));
 
-      console.log('[LOGIN] before token/user state set');
+      console.log('[LOGIN] instantly setting token/user state without waiting on Storage');
       setToken(accessToken);
       setUser(res.user);
       console.log('[LOGIN] after token/user state set');
