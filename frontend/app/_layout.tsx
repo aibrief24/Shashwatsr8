@@ -47,7 +47,7 @@ async function registerForPushNotificationsAsync() {
       console.log('Failed to get push token for push notification!');
       return;
     }
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId ?? "e4aa3746-6261-41f1-bb3d-b0a87b6f0f6e";
     if (!projectId || projectId === "placeholder-project-id") {
       console.log('No valid projectId found in app.json. Please run `eas init` to generate a real project ID.');
       return;
@@ -72,58 +72,43 @@ async function registerForPushNotificationsAsync() {
   return token;
 }
 
-function AppContent() {
-  const { user, token, loading } = useAuth();
-  const router = useRouter();
+function NotificationObserver() {
+  const { user, token } = useAuth();
 
   useEffect(() => {
-    console.log('[Startup] AppContent mounted, setting 800ms timer to hide splash');
+    if (user?.id && token) {
+      console.log('[DEBUG] Scheduling Push Registration 3 seconds deferred');
+      const timer = setTimeout(() => {
+        InteractionManager.runAfterInteractions(() => {
+          registerForPushNotificationsAsync().then((pushToken) => {
+            if (pushToken) {
+              api.registerPushToken(pushToken, Platform.OS, token)
+                .then(() => console.log('[DEBUG] Token safely registered on backend'))
+                .catch((e: any) => console.error('[DEBUG] Token register error:', e));
+            }
+          }).catch((err: any) => console.log('[DEBUG] Safe catch of push token generation failure:', err));
+        });
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [user?.id, token]);
+
+  return null;
+}
+
+function GlobalSplashHider() {
+  useEffect(() => {
+    console.log('[Startup] Setting 800ms timer to hide splash screen');
     const timer = setTimeout(async () => {
       try {
         await SplashScreen.hideAsync();
-        console.log('[Startup] Splash screen successfully hidden');
       } catch (e) {
         console.error('[Startup] Splash screen hide failed:', e);
       }
     }, 800);
     return () => clearTimeout(timer);
   }, []);
-
-  useEffect(() => {
-    if (user?.id && token) {
-      console.log('[DEBUG-CRASH] push registration start (INTENTIONALLY DISABLED)');
-      console.log('[DEBUG-CRASH] push registration end (INTENTIONALLY DISABLED)');
-      /* NATIVE BLOCK DISABLED
-      console.log('[DEBUG] Scheduling Push Registration 3 seconds deferred');
-      const timer = setTimeout(() => {
-        InteractionManager.runAfterInteractions(() => {
-          registerForPushNotificationsAsync().then((pushToken) => { ... });
-        });
-      }, 3000);
-      return () => clearTimeout(timer);
-      */
-    }
-  }, [user?.id, token]);
-
-
-  return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: Colors.background },
-        animation: 'fade',
-      }}
-    >
-      <Stack.Screen name="index" />
-      <Stack.Screen name="onboarding" />
-      <Stack.Screen name="login" />
-      <Stack.Screen name="signup" />
-      <Stack.Screen name="forgot-password" />
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="article/[id]" options={{ animation: 'slide_from_right' }} />
-      <Stack.Screen name="search" options={{ animation: 'slide_from_right' }} />
-    </Stack>
-  );
+  return null;
 }
 
 export default function RootLayout() {
@@ -131,7 +116,24 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
         <StatusBar style="light" />
-        <AppContent />
+        <GlobalSplashHider />
+        <NotificationObserver />
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: Colors.background },
+            animation: 'fade',
+          }}
+        >
+          <Stack.Screen name="index" />
+          <Stack.Screen name="onboarding" />
+          <Stack.Screen name="login" />
+          <Stack.Screen name="signup" />
+          <Stack.Screen name="forgot-password" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="article/[id]" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="search" options={{ animation: 'slide_from_right' }} />
+        </Stack>
       </AuthProvider>
     </GestureHandlerRootView>
   );
