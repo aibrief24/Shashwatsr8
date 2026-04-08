@@ -48,6 +48,17 @@ def _run_migrations():
                 )
             """)
 
+            # 2. notification_logs table
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS notification_logs (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    article_id TEXT,
+                    status TEXT,
+                    provider_response TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+
             # 2. Unique index on article_url to prevent duplicates
             cur.execute("""
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_articles_article_url
@@ -261,25 +272,49 @@ def logout(request: Request):
 @api_router.get("/articles")
 def get_articles(category: Optional[str] = None, limit: int = 50, offset: int = 0):
     if category and category != "Latest":
-        rows = query(
-            "SELECT * FROM articles WHERE status = 'published' AND category = %s ORDER BY published_at DESC LIMIT %s OFFSET %s",
-            (category, limit, offset)
-        )
-        total_rows = query("SELECT count(*) as cnt FROM articles WHERE status = 'published' AND category = %s", (category,))
+        rows = query("""
+            SELECT * FROM (
+                SELECT DISTINCT ON (LOWER(TRIM(title))) *
+                FROM articles
+                WHERE status = 'published' AND category = %s
+                ORDER BY LOWER(TRIM(title)), published_at DESC
+            ) sub
+            ORDER BY published_at DESC
+            LIMIT %s OFFSET %s
+        """, (category, limit, offset))
+        total_rows = query("SELECT count(DISTINCT LOWER(TRIM(title))) as cnt FROM articles WHERE status = 'published' AND category = %s", (category,))
     else:
-        rows = query(
-            "SELECT * FROM articles WHERE status = 'published' AND published_at >= NOW() - INTERVAL '2 days' ORDER BY published_at DESC LIMIT %s OFFSET %s",
-            (limit, offset)
-        )
-        total_rows = query("SELECT count(*) as cnt FROM articles WHERE status = 'published' AND published_at >= NOW() - INTERVAL '2 days'")
+        rows = query("""
+            SELECT * FROM (
+                SELECT DISTINCT ON (LOWER(TRIM(title))) *
+                FROM articles
+                WHERE status = 'published' 
+                  AND published_at >= NOW() - INTERVAL '2 days'
+                  AND title IS NOT NULL AND title != ''
+                  AND summary IS NOT NULL AND summary != ''
+                ORDER BY LOWER(TRIM(title)), published_at DESC
+            ) sub
+            ORDER BY published_at DESC
+            LIMIT %s OFFSET %s
+        """, (limit, offset))
+        total_rows = query("SELECT count(DISTINCT LOWER(TRIM(title))) as cnt FROM articles WHERE status = 'published' AND published_at >= NOW() - INTERVAL '2 days'")
         
-        # Fallback if there are barely any articles in the 48 hour window
+        # Extended fallback to 7 days if exact dedupe aggressively shrinks payload
         if (not rows or len(rows) < limit) and offset == 0:
-            rows = query(
-                "SELECT * FROM articles WHERE status = 'published' AND published_at >= NOW() - INTERVAL '7 days' ORDER BY published_at DESC LIMIT %s OFFSET %s",
-                (limit, offset)
-            )
-            total_rows = query("SELECT count(*) as cnt FROM articles WHERE status = 'published' AND published_at >= NOW() - INTERVAL '7 days'")
+            rows = query("""
+                SELECT * FROM (
+                    SELECT DISTINCT ON (LOWER(TRIM(title))) *
+                    FROM articles
+                    WHERE status = 'published' 
+                      AND published_at >= NOW() - INTERVAL '7 days'
+                      AND title IS NOT NULL AND title != ''
+                      AND summary IS NOT NULL AND summary != ''
+                    ORDER BY LOWER(TRIM(title)), published_at DESC
+                ) sub
+                ORDER BY published_at DESC
+                LIMIT %s OFFSET %s
+            """, (limit, offset))
+            total_rows = query("SELECT count(DISTINCT LOWER(TRIM(title))) as cnt FROM articles WHERE status = 'published' AND published_at >= NOW() - INTERVAL '7 days'")
             
     total = total_rows[0]["cnt"] if total_rows else 0
 
@@ -391,11 +426,18 @@ def get_bookmark_ids(request: Request):
 # ─── Push Notifications ──────────────────────────────────────────────────────
 
 @api_router.post("/push/register")
-def register_push_token(req: PushTokenRequest):
+def register_push_token(req: PushTokenRequest, request: Request):
+    user_id = None
+    try:
+        payload = get_current_user(request)
+        user_id = payload.get("sub")
+    except Exception:
+        pass
+
     try:
         execute(
-            "INSERT INTO push_tokens (token, platform) VALUES (%s, %s) ON CONFLICT (token) DO UPDATE SET platform = %s",
-            (req.token, req.platform, req.platform)
+            "INSERT INTO push_tokens (token, platform, user_id) VALUES (%s, %s, %s) ON CONFLICT (token) DO UPDATE SET platform = %s, user_id = %s",
+            (req.token, req.platform, user_id, req.platform, user_id)
         )
     except Exception as e:
         logger.warning(f"Push token register error: {e}")

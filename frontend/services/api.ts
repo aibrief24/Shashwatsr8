@@ -76,7 +76,7 @@ export const api = {
     request('/auth/reset-password', { method: 'POST', body: JSON.stringify({ email }) }),
 
   // Articles
-  getArticles: (category?: string, limit = 15, offset = 0) => {
+  getArticles: (category?: string, limit = 12, offset = 0) => {
     const params = new URLSearchParams();
     if (category && category !== 'Latest') params.set('category', category);
     params.set('limit', String(limit));
@@ -114,8 +114,8 @@ export const api = {
     }),
 
   // Push Notifications
-  registerPushToken: (pushToken: string, platform: string) =>
-    request('/push/register', { method: 'POST', body: JSON.stringify({ token: pushToken, platform }) }),
+  registerPushToken: (pushToken: string, platform: string, authToken: string) =>
+    request('/push/register', { method: 'POST', body: JSON.stringify({ token: pushToken, platform }), headers: authHeaders(authToken) }),
 
   // Settings
   getSettings: () => request('/settings'),
