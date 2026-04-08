@@ -86,38 +86,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Delayed User Sync Effect
   useEffect(() => {
     if (token && !user) {
-      const syncUser = async () => {
-        try {
-          const userData = await api.getMe(token);
-          setUser(userData);
-        } catch (e) {
-          console.log('[Perf] Background User Sync Failed silently');
-        }
-      };
-      // Defer heavily to avoid blocking initial feed render routines
-      const timer = setTimeout(() => {
-        InteractionManager.runAfterInteractions(syncUser);
-      }, 2500);
-      return () => clearTimeout(timer);
+      console.log('[DEBUG-CRASH] profile sync intentionally disabled');
+      /*
+      const syncUser = async () => { ... }
+      */
     }
   }, [token, user]);
 
   // Delayed Bookmark Sync Effect
   useEffect(() => {
     if (token && user?.id) {
-      const syncBookmarks = async () => {
-        try {
-          const bm = await api.getBookmarkIds(token);
-          setBookmarkIds(bm.ids || []);
-        } catch (e) {
-          console.log('[Perf] Background Bookmark Sync Failed silently');
-        }
-      };
-      // Defer strictly until the UI is entirely idle to avoid jitter
-      const timer = setTimeout(() => {
-        InteractionManager.runAfterInteractions(syncBookmarks);
-      }, 3500);
-      return () => clearTimeout(timer);
+      console.log('[DEBUG-CRASH] bookmark sync intentionally disabled');
+      /*
+      const syncBookmarks = async () => { ... }
+      */
     }
   }, [token, user?.id]);
 
@@ -128,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // api.login handles its own internal 30-second AbortController securely
       const res = await api.login(email, password) as any;
 
-      console.log('[LOGIN] after api.login response');
+      console.log('[DEBUG-CRASH] login success');
 
       const accessToken = res.access_token;
       if (!accessToken) throw new Error('Login failed: no token returned');
@@ -138,13 +120,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       Promise.all([
         AsyncStorage.setItem('auth_token', accessToken),
         res.refresh_token ? AsyncStorage.setItem('auth_refresh_token', res.refresh_token) : Promise.resolve(),
-      ]).then(() => console.log('[LOGIN] AsyncStorage sync complete in background'))
+      ]).then(() => console.log('[DEBUG-CRASH] token saved'))
         .catch(e => console.warn('[LOGIN] AsyncStorage warning:', e));
 
       console.log('[LOGIN] instantly setting token/user state without waiting on Storage');
       setToken(accessToken);
+      console.log('[DEBUG-CRASH] setToken done');
       setUser(res.user);
-      console.log('[LOGIN] after token/user state set');
+      console.log('[DEBUG-CRASH] setUser done');
 
       console.log('[LOGIN] before post-login sync');
       // Post-sync is detached automatically by our useEffects (syncUser/syncBookmarks)

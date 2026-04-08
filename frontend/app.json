@@ -13,17 +13,14 @@
       "bundleIdentifier": "com.aibrief24.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Take photos to share with articles",
-        "UIBackgroundModes": ["remote-notification"]
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
       }
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#020617"
-      },
-      "edgeToEdgeEnabled": true,
       "package": "com.aibrief24.app",
-      "permissions": ["RECEIVE_BOOT_COMPLETED", "VIBRATE", "POST_NOTIFICATIONS"]
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro",
@@ -53,9 +50,11 @@
       "typedRoutes": true
     },
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "placeholder-project-id"
+        "projectId": "e4aa3746-6261-41f1-bb3d-b0a87b6f0f6e"
       }
-    }
+    },
+    "owner": "sr8mu"
   }
 }

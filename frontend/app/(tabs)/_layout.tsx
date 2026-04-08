@@ -1,9 +1,14 @@
 import { Tabs } from 'expo-router';
 import { View, StyleSheet, Platform } from 'react-native';
+import { useEffect } from 'react';
 import { Colors } from '@/constants/theme';
 import { Home, LayoutGrid, Bookmark, Settings } from 'lucide-react-native';
 
 export default function TabsLayout() {
+  useEffect(() => {
+    console.log('[DEBUG-CRASH] tabs mount');
+  }, []);
+
   return (
     <Tabs
       screenOptions={{

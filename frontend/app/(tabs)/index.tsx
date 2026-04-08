@@ -107,15 +107,25 @@ const ArticleCard = React.memo(({ article, index, handleShare, TAB_BAR_OFFSET, C
         onPress={() => router.push(`/article/${article.id}`)}
       >
         <View style={styles.imageContainer}>
-          {/* === arXiv: premium research placeholder === */}
-          {article.image_source_type === 'arxiv_pool' || (!article.image_url && article.article_url?.includes('arxiv.org')) ? (
+          {/* === Real article image — prioritized over any domain defaults === */}
+          {article.image_url ? (
+            <Image
+              source={{ uri: article.image_url }}
+              style={styles.image}
+              contentFit="cover"
+              transition={200}
+              priority={index < 2 ? 'high' : 'normal'}
+              cachePolicy="memory-disk"
+              placeholder="#080e1e"
+            />
+          ) : article.image_source_type === 'arxiv_pool' || article.article_url?.includes('arxiv.org') ? (
+            /* === arXiv: premium research placeholder === */
             <LinearGradient
               colors={['#04091a', '#060e22', '#050c1e']}
               style={[styles.image, styles.arxivPlaceholder]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
-              {/* Grid lines overlay */}
               <View style={styles.arxivGrid} pointerEvents="none">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <View key={`h${i}`} style={[styles.arxivGridLine, { top: `${(i + 1) * 11}%` as any }]} />
@@ -124,7 +134,6 @@ const ArticleCard = React.memo(({ article, index, handleShare, TAB_BAR_OFFSET, C
                   <View key={`v${i}`} style={[styles.arxivGridLineV, { left: `${(i + 1) * 14}%` as any }]} />
                 ))}
               </View>
-              {/* Glowing center badge */}
               <View style={styles.arxivBadge}>
                 <View style={styles.arxivGlow} />
                 <Text style={styles.arxivSymbol}>∂</Text>
@@ -132,8 +141,7 @@ const ArticleCard = React.memo(({ article, index, handleShare, TAB_BAR_OFFSET, C
                 <Text style={styles.arxivSub}>arXiv Preprint</Text>
               </View>
             </LinearGradient>
-
-          ) : article.image_source_type?.includes('pool') || !article.image_url ? (
+          ) : (
             /* === Non-arXiv fallback: source favicon card === */
             <LinearGradient
               colors={['#080e1e', '#0a1530', '#06111f']}
@@ -158,17 +166,6 @@ const ArticleCard = React.memo(({ article, index, handleShare, TAB_BAR_OFFSET, C
               </View>
             </LinearGradient>
 
-          ) : (
-            /* === Real article image — expo-image for caching + fade-in === */
-            <Image
-              source={{ uri: article.thumbnail_url || article.image_url }}
-              style={styles.image}
-              contentFit="cover"
-              transition={250}
-              priority={index < 3 ? 'high' : 'normal'}
-              cachePolicy="memory-disk"
-              placeholder="#080e1e"
-            />
           )}
 
           <LinearGradient colors={['transparent', 'rgba(2,6,23,0.6)', Colors.background]} style={styles.imageOverlay} />
@@ -265,6 +262,12 @@ export default function HomeFeed() {
       const loaded = res.articles || [];
       setArticles(loaded);
       setFeedArticlesCache(loaded);
+
+      // Execute aggressive native prefetch to eliminate rapid scroll jank
+      const validImages = loaded.map((a: any) => a.image_url).filter(Boolean);
+      if (validImages.length > 0) {
+        Image.prefetch(validImages);
+      }
     } catch (e) {
       console.log('Failed to load articles:', e);
     } finally {

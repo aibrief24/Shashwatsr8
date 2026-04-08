@@ -12,6 +12,7 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const { signup } = useAuth();
   const router = useRouter();
@@ -20,16 +21,26 @@ export default function SignupScreen() {
     if (!email.trim() || !password || !name.trim()) { setError('Please fill all fields'); return; }
     if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
     setError('');
+    setSuccess('');
     setLoading(true);
     try {
       const res = await signup(email.trim().toLowerCase(), password, name.trim());
       if (res?.needsConfirmation) {
-        setError('Account created! Please check your email to confirm your account, then sign in.');
+        setSuccess('Account created successfully.\n\nPlease check your email to verify your account before signing in. (Check your spam folder if it does not arrive within a few minutes)');
       } else {
         router.replace('/(tabs)');
       }
     } catch (e: any) {
-      setError(e.message || 'Signup failed');
+      const msg = (e.message || '').toLowerCase();
+      let safeMsg = 'Signup failed. Please try again.';
+      if (msg.includes('already registered') || msg.includes('already exists')) safeMsg = 'An account with this email already exists. Please sign in instead.';
+      else if (msg.includes('password')) safeMsg = 'Please use a stronger password.';
+      else if (msg.includes('rate limit') || msg.includes('requests')) safeMsg = 'Too many attempts. Please try again in a few minutes.';
+      else if (msg.includes('invalid email') || msg.includes('format')) safeMsg = 'Please provide a valid email format.';
+      else if (msg.includes('supabase') || msg.includes('internal') || msg.includes('fetch') || msg.includes('database')) safeMsg = 'Servers are busy right now. Please try again in a moment.';
+      else if (e.message) safeMsg = e.message;
+
+      setError(safeMsg);
     } finally {
       setLoading(false);
     }
@@ -49,6 +60,7 @@ export default function SignupScreen() {
               <Text style={styles.subtitle}>Join AIBrief24 for daily AI news</Text>
             </View>
 
+            {success ? <View style={styles.successBox}><Text style={styles.successText}>{success}</Text></View> : null}
             {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
 
             <View style={styles.inputGroup}>
@@ -62,9 +74,7 @@ export default function SignupScreen() {
               </View>
               <View style={styles.inputRow}>
                 <Lock size={20} color={Colors.textTertiary} />
-                <View style={styles.inputWrapper}>
-                  <TextInput testID="signup-password-input" style={styles.input} placeholder="Password (min 6 chars)" placeholderTextColor={Colors.textTertiary} value={password} onChangeText={setPassword} secureTextEntry={!showPass} />
-                </View>
+                <TextInput testID="signup-password-input" style={styles.input} placeholder="Password (min 6 chars)" placeholderTextColor={Colors.textTertiary} value={password} onChangeText={setPassword} secureTextEntry={!showPass} />
                 <TouchableOpacity style={styles.eyeIcon} onPress={() => setShowPass(!showPass)}>
                   {showPass ? <EyeOff size={20} color={Colors.textTertiary} /> : <Eye size={20} color={Colors.textTertiary} />}
                 </TouchableOpacity>
@@ -97,12 +107,13 @@ const styles = StyleSheet.create({
   logoText: { fontSize: 26, fontWeight: '900', color: '#fff', letterSpacing: 1 },
   title: { fontSize: 28, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5, marginBottom: 8 },
   subtitle: { fontSize: 15, color: Colors.textSecondary },
+  successBox: { backgroundColor: Colors.success + '15', borderRadius: Radius.md, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: Colors.success + '30' },
+  successText: { color: Colors.success, fontSize: FontSize.sm, textAlign: 'center', fontWeight: '600', lineHeight: 22 },
   errorBox: { backgroundColor: Colors.error + '20', borderRadius: Radius.md, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: Colors.error + '50' },
   errorText: { color: Colors.error, fontSize: FontSize.sm, textAlign: 'center', fontWeight: '500' },
   inputGroup: { marginBottom: 32, gap: 16 },
   inputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surface, borderRadius: 16, paddingHorizontal: 20, height: 60, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-  inputWrapper: { flex: 1 },
-  input: { color: Colors.textPrimary, fontSize: 16, marginLeft: 16 },
+  input: { flex: 1, height: '100%', color: Colors.textPrimary, fontSize: 16, marginLeft: 16, paddingVertical: 0, marginVertical: 0, includeFontPadding: false, textAlignVertical: 'center' },
   eyeIcon: { padding: 8 },
   btnShadowWrap: { shadowColor: Colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 15, elevation: 6 },
   btn: { height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center' },

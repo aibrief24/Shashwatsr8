@@ -91,19 +91,17 @@ function AppContent() {
 
   useEffect(() => {
     if (user?.id && token) {
+      console.log('[DEBUG-CRASH] push registration start (INTENTIONALLY DISABLED)');
+      console.log('[DEBUG-CRASH] push registration end (INTENTIONALLY DISABLED)');
+      /* NATIVE BLOCK DISABLED
       console.log('[DEBUG] Scheduling Push Registration 3 seconds deferred');
       const timer = setTimeout(() => {
         InteractionManager.runAfterInteractions(() => {
-          registerForPushNotificationsAsync().then((pushToken) => {
-            if (pushToken) {
-              api.registerPushToken(pushToken, Platform.OS, token)
-                .then(() => console.log('[DEBUG] Token safely registered on backend'))
-                .catch(e => console.error('[DEBUG] Token register error:', e));
-            }
-          }).catch(err => console.log('[DEBUG] Safe catch of push token generation failure:', err));
+          registerForPushNotificationsAsync().then((pushToken) => { ... });
         });
       }, 3000);
       return () => clearTimeout(timer);
+      */
     }
   }, [user?.id, token]);
 

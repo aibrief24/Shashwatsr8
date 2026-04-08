@@ -1,0 +1,19 @@
+	
+project_info	
+project_number	"760524482232"
+project_id	"aibrief24"
+storage_bucket	"aibrief24.firebasestorage.app"
+client	
+0	
+client_info	
+mobilesdk_app_id	"1:760524482232:android:80da121b4e8fdb5e64f64d"
+android_client_info	
+package_name	"com.aibrief24.app"
+oauth_client	[]
+api_key	
+0	
+current_key	"AIzaSyAvyz7dICbttRUZ71VaHGwpk6a7L7YrSHo"
+services	
+appinvite_service	
+other_platform_oauth_client	[]
+configuration_version	"1"

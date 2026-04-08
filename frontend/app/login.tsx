@@ -20,10 +20,20 @@ export default function LoginScreen() {
     setError('');
     setLoading(true);
     try {
+      console.log('[DEBUG-LOGIN-FLOW] Calling login()');
       await login(email, password);
+      console.log('[DEBUG-CRASH] redirect start');
       router.replace('/(tabs)');
+      console.log('[DEBUG-LOGIN-FLOW] Stack completely replaced.');
     } catch (e: any) {
-      setError(e.message || 'Login failed');
+      const msg = (e.message || '').toLowerCase();
+      let safeMsg = 'Login failed. Please check your credentials.';
+      if (msg.includes('invalid login credentials')) safeMsg = 'Invalid email or password.';
+      else if (msg.includes('email not confirmed')) safeMsg = 'Please verify your email address before signing in.';
+      else if (msg.includes('supabase') || msg.includes('internal') || msg.includes('fetch')) safeMsg = 'Server connection error. Please try again.';
+      else if (e.message) safeMsg = e.message;
+
+      setError(safeMsg);
     } finally {
       setLoading(false);
     }
@@ -52,9 +62,7 @@ export default function LoginScreen() {
               </View>
               <View style={styles.inputRow}>
                 <Lock size={20} color={Colors.textTertiary} />
-                <View style={styles.inputWrapper}>
-                  <TextInput testID="login-password-input" style={styles.input} placeholder="Password" placeholderTextColor={Colors.textTertiary} value={password} onChangeText={setPassword} secureTextEntry={!showPass} />
-                </View>
+                <TextInput testID="login-password-input" style={styles.input} placeholder="Password" placeholderTextColor={Colors.textTertiary} value={password} onChangeText={setPassword} secureTextEntry={!showPass} />
                 <TouchableOpacity style={styles.eyeIcon} onPress={() => setShowPass(!showPass)}>
                   {showPass ? <EyeOff size={20} color={Colors.textTertiary} /> : <Eye size={20} color={Colors.textTertiary} />}
                 </TouchableOpacity>
@@ -95,8 +103,7 @@ const styles = StyleSheet.create({
   errorText: { color: Colors.error, fontSize: FontSize.sm, textAlign: 'center', fontWeight: '500' },
   inputGroup: { marginBottom: 32, gap: 16 },
   inputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surface, borderRadius: 16, paddingHorizontal: 20, height: 60, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-  inputWrapper: { flex: 1 },
-  input: { color: Colors.textPrimary, fontSize: 16, marginLeft: 16 },
+  input: { flex: 1, height: '100%', color: Colors.textPrimary, fontSize: 16, marginLeft: 16, paddingVertical: 0, marginVertical: 0, includeFontPadding: false, textAlignVertical: 'center' },
   eyeIcon: { padding: 8 },
   btnShadowWrap: { shadowColor: Colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 15, elevation: 6 },
   btn: { height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center' },
