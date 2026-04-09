@@ -86,20 +86,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Delayed User Sync Effect
   useEffect(() => {
     if (token && !user) {
-      console.log('[DEBUG-CRASH] profile sync intentionally disabled');
-      /*
-      const syncUser = async () => { ... }
-      */
+      const syncUser = async () => {
+        console.log('[DEBUG-CRASH] syncUser start');
+        try {
+          const me = await api.getMe(token);
+          if (me) {
+            console.log('[DEBUG-CRASH] setUser after background sync');
+            setUser(me);
+          }
+        } catch (e) {
+          console.log('[DEBUG-CRASH] token refresh path start / getMe failed', e);
+        } finally {
+          console.log('[DEBUG-CRASH] syncUser end');
+        }
+      };
+
+      const t1 = setTimeout(() => {
+        InteractionManager.runAfterInteractions(() => {
+          syncUser();
+        });
+      }, 500);
+      return () => clearTimeout(t1);
     }
   }, [token, user]);
 
   // Delayed Bookmark Sync Effect
   useEffect(() => {
     if (token && user?.id) {
-      console.log('[DEBUG-CRASH] bookmark sync intentionally disabled');
-      /*
-      const syncBookmarks = async () => { ... }
-      */
+      const syncBookmarks = async () => {
+        console.log('[DEBUG-CRASH] syncBookmarks start');
+        try {
+          const bm = await api.getBookmarkIds(token);
+          console.log('[DEBUG-CRASH] setBookmarkIds after background sync');
+          setBookmarkIds(bm.ids || []);
+        } catch (e) {
+          console.log('[DEBUG-CRASH] syncBookmarks failed', e);
+        } finally {
+          console.log('[DEBUG-CRASH] syncBookmarks end');
+        }
+      };
+
+      const t2 = setTimeout(() => {
+        InteractionManager.runAfterInteractions(() => {
+          syncBookmarks();
+        });
+      }, 1500);
+      return () => clearTimeout(t2);
     }
   }, [token, user?.id]);
 

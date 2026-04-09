@@ -37,33 +37,40 @@ async function registerForPushNotificationsAsync() {
   }
 
   if (Device.isDevice) {
+    console.log('[DEBUG-CRASH] permission request start');
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
     if (existingStatus !== 'granted') {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
+    console.log(`[DEBUG-CRASH] permission result: ${finalStatus}`);
+
     if (finalStatus !== 'granted') {
       console.log('Failed to get push token for push notification!');
       return;
     }
     const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId ?? "e4aa3746-6261-41f1-bb3d-b0a87b6f0f6e";
+    console.log(`[DEBUG-CRASH] projectId used for getExpoPushTokenAsync: ${projectId}`);
+
     if (!projectId || projectId === "placeholder-project-id") {
       console.log('No valid projectId found in app.json. Please run `eas init` to generate a real project ID.');
       return;
     }
 
-    // Explicitly check for Expo Go on Android which no longer supports push notifications
     if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient && Platform.OS === 'android') {
       console.log('expo-notifications: Android Push notification tokens are not supported in Expo Go. Please use a development build.');
       return;
     }
 
     try {
+      console.log('[DEBUG-CRASH] token generation start');
       token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+      console.log('[DEBUG-CRASH] token generation end');
+      console.log(`[DEBUG-CRASH] generated Expo push token value presence: ${!!token}`);
       console.log('Expo Push Token:', token);
     } catch (e) {
-      console.log('Token generation error:', e);
+      console.log('[DEBUG-CRASH] error thrown during token generation:', e);
     }
   } else {
     console.log('Must use physical device for Push Notifications. (Not an emulator/simulator)');
@@ -76,16 +83,21 @@ function NotificationObserver() {
   const { user, token } = useAuth();
 
   useEffect(() => {
+    console.log('[DEBUG-CRASH] NotificationObserver mount');
     if (user?.id && token) {
       console.log('[DEBUG] Immediate Push Registration (No Timeout to avoid Android 13 prompt suppression)');
       InteractionManager.runAfterInteractions(() => {
         registerForPushNotificationsAsync().then((pushToken) => {
           if (pushToken) {
+            console.log('[DEBUG-CRASH] backend /push/register start');
             api.registerPushToken(pushToken, Platform.OS, token)
-              .then(() => console.log('[DEBUG] Token safely registered on backend'))
-              .catch((e: any) => console.error('[DEBUG] Token register error:', e));
+              .then(() => {
+                console.log('[DEBUG-CRASH] backend response result: success');
+                console.log('[DEBUG-CRASH] backend /push/register end');
+              })
+              .catch((e: any) => console.error('[DEBUG-CRASH] error thrown during register flow:', e));
           }
-        }).catch((err: any) => console.log('[DEBUG] Safe catch of push token generation failure:', err));
+        }).catch((err: any) => console.log('[DEBUG-CRASH] error thrown during permission/token flow:', err));
       });
     }
   }, [user?.id, token]);

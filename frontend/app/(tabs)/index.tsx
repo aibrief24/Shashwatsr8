@@ -9,8 +9,6 @@ import { Colors, FontSize, Spacing, Radius, TELEGRAM_URL, WEBSITE_URL } from '@/
 import { LinearGradient } from 'expo-linear-gradient';
 import { Search, Bookmark, BookmarkCheck, ExternalLink, Share2, Send, Globe, Zap, Clock } from 'lucide-react-native';
 
-
-
 interface Article {
   id: string;
   title: string;
@@ -25,6 +23,19 @@ interface Article {
   is_breaking?: boolean;
   image_source_type?: string;
 }
+
+const MOCK_DATA: Article[] = Array.from({ length: 5 }).map((_, i) => ({
+  id: `mock-${i}`,
+  title: `Mock Safe Structure Article ${i}`,
+  summary: `This is a mock summary for article ${i} specifically loaded for structural isolation testing without any network traffic or remote downloads.`,
+  image_url: '',
+  source_name: 'MockSource',
+  source_url: 'https://example.com',
+  category: 'AI Research',
+  published_at: new Date().toISOString(),
+  article_url: 'https://example.com',
+  image_source_type: i % 2 === 0 ? 'arxiv_pool' : undefined
+}));
 
 function timeAgo(dateStr: string): string {
   const now = new Date();
@@ -42,7 +53,9 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 const AnimatedSkeleton = ({ CARD_HEIGHT, TAB_BAR_OFFSET }: any) => {
   const op = useRef(new Animated.Value(0.3)).current;
+
   useEffect(() => {
+    console.log('[DEBUG-CRASH] AnimatedSkeleton mount');
     Animated.loop(
       Animated.sequence([
         Animated.timing(op, { toValue: 0.7, duration: 800, useNativeDriver: true }),
@@ -57,14 +70,11 @@ const AnimatedSkeleton = ({ CARD_HEIGHT, TAB_BAR_OFFSET }: any) => {
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: '#1A2438', opacity: op }]} />
         <View style={styles.imageOverlay} />
 
-        {/* Skeleton UI blocks */}
         <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, zIndex: 10 }}>
           <View style={{ width: 80, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.1)', marginBottom: 16 }} />
           <View style={{ width: '90%', height: 32, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.1)', marginBottom: 12 }} />
           <View style={{ width: '70%', height: 32, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.1)', marginBottom: 16 }} />
-
           <View style={{ width: '100%', height: 60, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.05)', marginBottom: 24 }} />
-
           <View style={{ flexDirection: 'row', gap: 12 }}>
             <View style={{ width: 120, height: 20, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.05)' }} />
             <View style={{ width: 100, height: 20, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.05)' }} />
@@ -107,66 +117,78 @@ const ArticleCard = React.memo(({ article, index, handleShare, TAB_BAR_OFFSET, C
         onPress={() => router.push(`/article/${article.id}`)}
       >
         <View style={styles.imageContainer}>
-          {/* === Real article image — prioritized over any domain defaults === */}
-          {article.image_url ? (
-            <Image
-              source={{ uri: article.image_url }}
-              style={styles.image}
-              contentFit="cover"
-              transition={200}
-              priority={index < 2 ? 'high' : 'normal'}
-              cachePolicy="memory-disk"
-              placeholder="#080e1e"
-            />
-          ) : article.image_source_type === 'arxiv_pool' || article.article_url?.includes('arxiv.org') ? (
-            /* === arXiv: premium research placeholder === */
-            <LinearGradient
-              colors={['#04091a', '#060e22', '#050c1e']}
-              style={[styles.image, styles.arxivPlaceholder]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <View style={styles.arxivGrid} pointerEvents="none">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <View key={`h${i}`} style={[styles.arxivGridLine, { top: `${(i + 1) * 11}%` as any }]} />
-                ))}
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <View key={`v${i}`} style={[styles.arxivGridLineV, { left: `${(i + 1) * 14}%` as any }]} />
-                ))}
-              </View>
-              <View style={styles.arxivBadge}>
-                <View style={styles.arxivGlow} />
-                <Text style={styles.arxivSymbol}>∂</Text>
-                <Text style={styles.arxivLabel}>AI RESEARCH PAPER</Text>
-                <Text style={styles.arxivSub}>arXiv Preprint</Text>
-              </View>
-            </LinearGradient>
-          ) : (
-            /* === Non-arXiv fallback: source favicon card === */
-            <LinearGradient
-              colors={['#080e1e', '#0a1530', '#06111f']}
-              style={[styles.image, styles.sourcePlaceholder]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <View style={styles.sourceDotGrid}>
-                {Array.from({ length: 30 }).map((_, i) => (
-                  <View key={i} style={[styles.sourceDot, { opacity: 0.05 + (i % 7) * 0.03 }]} />
-                ))}
-              </View>
-              <View style={styles.sourceBrandCenter}>
-                <View style={styles.sourceFaviconContainer}>
-                  <RNImage
-                    source={{ uri: `https://www.google.com/s2/favicons?domain=${article.source_url || article.article_url}&sz=128` }}
-                    style={styles.sourceFavicon}
-                    resizeMode="contain"
-                  />
-                </View>
-                <Text style={styles.sourceNameLabel}>{article.source_name}</Text>
-              </View>
-            </LinearGradient>
-
-          )}
+          {(() => {
+            console.log(`[DEBUG-CRASH] image resolution start for index ${index}`);
+            if (article.image_url) {
+              console.log(`[DEBUG-CRASH] image component mount for index ${index}`);
+              return (
+                <Image
+                  source={{ uri: article.image_url }}
+                  style={styles.image}
+                  contentFit="cover"
+                  transition={200}
+                  priority={index < 2 ? 'high' : 'normal'}
+                  cachePolicy="memory-disk"
+                  placeholder="#080e1e"
+                  onLoad={() => {
+                    console.log(`[DEBUG-CRASH] image loaded for index ${index}`);
+                    if (index === 0) console.log('[DEBUG-CRASH] first visible article image render');
+                  }}
+                />
+              );
+            } else if (article.image_source_type === 'arxiv_pool' || article.article_url?.includes('arxiv.org')) {
+              console.log(`[DEBUG-CRASH] fallback render start (arxiv) for index ${index}`);
+              return (
+                <LinearGradient
+                  colors={['#04091a', '#060e22', '#050c1e']}
+                  style={[styles.image, styles.arxivPlaceholder]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <View style={styles.arxivGrid} pointerEvents="none">
+                    {Array.from({ length: 8 }).map((_, i) => (
+                      <View key={`h${i}`} style={[styles.arxivGridLine, { top: `${(i + 1) * 11}%` as any }]} />
+                    ))}
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <View key={`v${i}`} style={[styles.arxivGridLineV, { left: `${(i + 1) * 14}%` as any }]} />
+                    ))}
+                  </View>
+                  <View style={styles.arxivBadge}>
+                    <View style={styles.arxivGlow} />
+                    <Text style={styles.arxivSymbol}>∂</Text>
+                    <Text style={styles.arxivLabel}>AI RESEARCH PAPER</Text>
+                    <Text style={styles.arxivSub}>arXiv Preprint</Text>
+                  </View>
+                </LinearGradient>
+              );
+            } else {
+              console.log(`[DEBUG-CRASH] fallback render start (source) for index ${index}`);
+              return (
+                <LinearGradient
+                  colors={['#080e1e', '#0a1530', '#06111f']}
+                  style={[styles.image, styles.sourcePlaceholder]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <View style={styles.sourceDotGrid}>
+                    {Array.from({ length: 30 }).map((_, i) => (
+                      <View key={i} style={[styles.sourceDot, { opacity: 0.05 + (i % 7) * 0.03 }]} />
+                    ))}
+                  </View>
+                  <View style={styles.sourceBrandCenter}>
+                    <View style={styles.sourceFaviconContainer}>
+                      <RNImage
+                        source={{ uri: `https://www.google.com/s2/favicons?domain=${article.source_url || article.article_url}&sz=128` }}
+                        style={styles.sourceFavicon}
+                        resizeMode="contain"
+                      />
+                    </View>
+                    <Text style={styles.sourceNameLabel}>{article.source_name}</Text>
+                  </View>
+                </LinearGradient>
+              );
+            }
+          })()}
 
           <LinearGradient colors={['transparent', 'rgba(2,6,23,0.6)', Colors.background]} style={styles.imageOverlay} />
           {article.is_breaking && (
@@ -235,7 +257,6 @@ export default function HomeFeed() {
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [offset, setOffset] = useState(0);
-  const { setFeedArticlesCache } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
@@ -245,31 +266,27 @@ export default function HomeFeed() {
   const TAB_BAR_OFFSET = Platform.OS === 'ios' ? 100 : 90;
   const CARD_HEIGHT = height - HEADER_HEIGHT;
 
-  useEffect(() => {
-    console.log('[DEBUG-UI] (tabs)/index.tsx mounted');
-    const task = InteractionManager.runAfterInteractions(() => {
-      console.log('[DEBUG-UI] feed interaction cleared, starting loadArticles()');
-      loadArticles();
-    });
-    return () => {
-      console.log('[DEBUG-UI] (tabs)/index.tsx unmounted');
-      task.cancel();
-    };
-  }, []);
-
   const loadArticles = async () => {
+    console.log('[DEBUG-CRASH] loadArticles start');
     try {
+      console.log('[DEBUG-CRASH] api.getArticles request start');
       const res = await api.getArticles(undefined, 15, 0);
-      const loaded = res.articles || [];
-      setArticles(loaded);
-      setFeedArticlesCache(loaded);
-      setOffset(15);
+      console.log('[DEBUG-CRASH] api.getArticles request end');
 
-      // Execute aggressive native prefetch to eliminate rapid scroll jank
+      const loaded = res.articles || [];
+      console.log(`[DEBUG-CRASH] response count: ${loaded.length}`);
+
+      console.log('[DEBUG-CRASH] state update with fetched articles start');
+      console.log('[DEBUG-CRASH] image prefetch start');
       const validImages = loaded.map((a: any) => a.image_url).filter(Boolean);
       if (validImages.length > 0) {
-        Image.prefetch(validImages);
+        Image.prefetch(validImages).then(() => console.log('[DEBUG-CRASH] image prefetch end')).catch(e => console.log('Prefetch err', e));
       }
+
+      setArticles(loaded);
+      setOffset(15);
+      console.log('[DEBUG-CRASH] state update with fetched articles end');
+
     } catch (e) {
       console.log('Failed to load articles:', e);
     } finally {
@@ -277,32 +294,19 @@ export default function HomeFeed() {
     }
   };
 
-  const loadMore = async () => {
-    try {
-      const res = await api.getArticles(undefined, 15, offset);
-      if (res.articles && res.articles.length > 0) {
-        setArticles(prev => {
-          const existingIds = new Set(prev.map(a => a.id));
-          const newItems = res.articles.filter((a: any) => !existingIds.has(a.id));
-          return [...prev, ...newItems];
-        });
-        setFeedArticlesCache(prev => {
-          const existingIds = new Set(prev.map((a: any) => a.id));
-          const newItems = res.articles.filter((a: any) => !existingIds.has(a.id));
-          return [...prev, ...newItems];
-        });
-        setOffset(prev => prev + 15);
-        Image.prefetch(res.articles.map((a: any) => a.image_url).filter(Boolean));
-      }
-    } catch (e) {
-      console.log('Load more failed', e);
+  useEffect(() => {
+    console.log('[DEBUG-CRASH] home/feed mount');
+    loadArticles();
+  }, []);
+
+  useEffect(() => {
+    if (!loading) {
+      console.log('[DEBUG-CRASH] FlatList render after fetched data arrives');
     }
-  };
+  }, [loading]);
 
   const handleShare = useCallback(async (article: Article) => {
-    try {
-      await Share.share({ message: `${article.title}\n\nRead more on AIBrief24:\n${article.article_url}`, title: article.title });
-    } catch { }
+    //
   }, []);
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -326,7 +330,6 @@ export default function HomeFeed() {
   if (loading) {
     return (
       <View testID="home-feed" style={styles.container}>
-        {/* Render shell header immediately */}
         <View style={[styles.header, { paddingTop: insets.top + 12, paddingBottom: 16, height: HEADER_HEIGHT }]}>
           <View style={styles.headerLeft}>
             <View style={styles.headerLogoBadge}>
@@ -334,8 +337,8 @@ export default function HomeFeed() {
               <Text style={styles.headerLogoText}>AI</Text>
             </View>
             <View>
-              <Text style={styles.headerTitle}>AIBrief24</Text>
-              <Text style={styles.headerSub}>Fresh AI updates today</Text>
+              <Text style={styles.headerTitle}>AIBrief24 MOCK</Text>
+              <Text style={styles.headerSub}>Isolating App Memory</Text>
             </View>
           </View>
           <View style={styles.headerBtn}>
@@ -343,17 +346,13 @@ export default function HomeFeed() {
           </View>
         </View>
 
-        {/* Pulsing Skeleton Card */}
         <AnimatedSkeleton CARD_HEIGHT={CARD_HEIGHT} TAB_BAR_OFFSET={TAB_BAR_OFFSET} />
       </View>
     );
   }
 
-
-
   return (
     <View testID="home-feed" style={styles.container}>
-      {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12, paddingBottom: 16, height: HEADER_HEIGHT }]}>
         <View style={styles.headerLeft}>
           <View style={styles.headerLogoBadge}>
@@ -361,8 +360,8 @@ export default function HomeFeed() {
             <Text style={styles.headerLogoText}>AI</Text>
           </View>
           <View>
-            <Text style={styles.headerTitle}>AIBrief24</Text>
-            <Text style={styles.headerSub}>Fresh AI updates today</Text>
+            <Text style={styles.headerTitle}>AIBrief24 MOCK</Text>
+            <Text style={styles.headerSub}>Isolating App Memory</Text>
           </View>
         </View>
         <TouchableOpacity testID="search-btn" style={styles.headerBtn} onPress={() => router.push('/search')}>
@@ -370,7 +369,6 @@ export default function HomeFeed() {
         </TouchableOpacity>
       </View>
 
-      {/* Swipe Feed */}
       <FlatList
         ref={flatListRef}
         testID="feed-list"
@@ -384,18 +382,14 @@ export default function HomeFeed() {
         decelerationRate="fast"
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
-        onEndReached={loadMore}
-        onEndReachedThreshold={1.5}
         windowSize={3}
         initialNumToRender={2}
         maxToRenderPerBatch={2}
-        // CRITICAL BUG: removeClippedSubviews on Android is known to hard-crash the UIManager on complex items!
         removeClippedSubviews={false}
         getItemLayout={(_, index) => ({ length: CARD_HEIGHT, offset: CARD_HEIGHT * index, index })}
         contentContainerStyle={{ paddingBottom: TAB_BAR_OFFSET }}
       />
 
-      {/* Page counter */}
       <View pointerEvents="none" style={[styles.pageCounter, { bottom: TAB_BAR_OFFSET + 12 }]}>
         <Text style={styles.pageCounterText}>{currentIndex + 1}/{articles.length}</Text>
       </View>
@@ -406,7 +400,6 @@ export default function HomeFeed() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   center: { justifyContent: 'center', alignItems: 'center' },
-  loadingText: { color: Colors.textSecondary, fontSize: FontSize.sm, marginTop: 12 },
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 20, backgroundColor: Colors.background, zIndex: 10,
@@ -425,13 +418,12 @@ const styles = StyleSheet.create({
   breakingBadge: {
     position: 'absolute', top: 16, left: 16, flexDirection: 'row', alignItems: 'center',
     backgroundColor: Colors.accent, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, gap: 5,
-    shadowColor: Colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
   },
   breakingText: { color: '#fff', fontSize: 10, fontWeight: '800', letterSpacing: 1.5 },
   categoryBadge: {
     position: 'absolute', top: 16, right: 16,
     backgroundColor: 'rgba(11, 18, 33, 0.75)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(10px)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
   },
   categoryText: { color: '#fff', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
   cardContent: { flex: 0.65, paddingHorizontal: 20, paddingTop: 12, backgroundColor: Colors.background, justifyContent: 'space-between' },
@@ -446,7 +438,7 @@ const styles = StyleSheet.create({
   expandBtn: { marginTop: 6, alignSelf: 'flex-start', paddingVertical: 4, paddingRight: 20 },
   expandBtnText: { color: Colors.primary, fontSize: 13, fontWeight: '700', letterSpacing: 0.5 },
   actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  readBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: Radius.full, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
+  readBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: Radius.full },
   readBtnText: { fontSize: FontSize.sm, color: '#fff', fontWeight: '700', letterSpacing: 0.5 },
   actionsRight: { flexDirection: 'row', gap: 12 },
   actionBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.surfaceHighlight, justifyContent: 'center', alignItems: 'center' },
@@ -461,141 +453,20 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)',
   },
   pageCounterText: { fontSize: 11, color: Colors.textSecondary, fontWeight: '700', letterSpacing: 1 },
-  researchPlaceholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  researchDotGrid: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 24,
-    gap: 20,
-    justifyContent: 'space-around',
-    alignItems: 'center',
-  },
-  researchDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#4f8ef7',
-  },
-  researchBadgeCenter: {
-    alignItems: 'center',
-    gap: 8,
-  },
-  researchSymbol: {
-    fontSize: 52,
-    color: 'rgba(79,142,247,0.5)',
-    fontWeight: '200',
-  },
-  researchLabel: {
-    fontSize: 10,
-    color: 'rgba(79,142,247,0.6)',
-    letterSpacing: 3,
-    fontWeight: '700',
-  },
-  // ─── Source-branded fallback card ───────────────────────────────────────────
-  sourcePlaceholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  sourceDotGrid: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 16,
-    gap: 18,
-    justifyContent: 'space-around',
-    alignItems: 'center',
-  },
-  sourceDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: '#3a7bd5',
-  },
-  sourceBrandCenter: {
-    alignItems: 'center',
-    gap: 14,
-  },
-  sourceFaviconContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 12,
-  },
-  sourceFavicon: {
-    width: 48,
-    height: 48,
-  },
-  sourceNameLabel: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.45)',
-    letterSpacing: 2.5,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  // ─── arXiv premium research placeholder ──────────────────────────────────
-  arxivPlaceholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  arxivGrid: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-  },
-  arxivGridLine: {
-    position: 'absolute',
-    left: 0, right: 0,
-    height: 1,
-    backgroundColor: 'rgba(59,130,246,0.06)',
-  },
-  arxivGridLineV: {
-    position: 'absolute',
-    top: 0, bottom: 0,
-    width: 1,
-    backgroundColor: 'rgba(59,130,246,0.06)',
-  },
-  arxivBadge: {
-    alignItems: 'center',
-    gap: 8,
-  },
-  arxivGlow: {
-    position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(59,130,246,0.08)',
-    top: -30,
-  },
-  arxivSymbol: {
-    fontSize: 52,
-    color: 'rgba(99,155,255,0.55)',
-    fontWeight: '300',
-    lineHeight: 60,
-  },
-  arxivLabel: {
-    fontSize: 10,
-    color: 'rgba(147,197,253,0.5)',
-    letterSpacing: 3,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  arxivSub: {
-    fontSize: 9,
-    color: 'rgba(147,197,253,0.28)',
-    letterSpacing: 1.5,
-    fontWeight: '500',
-  },
+  arxivPlaceholder: { justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  arxivGrid: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  arxivGridLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: 'rgba(59,130,246,0.06)' },
+  arxivGridLineV: { position: 'absolute', top: 0, bottom: 0, width: 1, backgroundColor: 'rgba(59,130,246,0.06)' },
+  arxivBadge: { alignItems: 'center', gap: 8 },
+  arxivGlow: { position: 'absolute', width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(59,130,246,0.08)', top: -30 },
+  arxivSymbol: { fontSize: 52, color: 'rgba(99,155,255,0.55)', fontWeight: '300', lineHeight: 60 },
+  arxivLabel: { fontSize: 10, color: 'rgba(147,197,253,0.5)', letterSpacing: 3, fontWeight: '700', textTransform: 'uppercase' },
+  arxivSub: { fontSize: 9, color: 'rgba(147,197,253,0.28)', letterSpacing: 1.5, fontWeight: '500' },
+  sourcePlaceholder: { justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  sourceDotGrid: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, flexDirection: 'row', flexWrap: 'wrap', padding: 16, gap: 18, justifyContent: 'space-around', alignItems: 'center' },
+  sourceDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#3a7bd5' },
+  sourceBrandCenter: { alignItems: 'center', gap: 14 },
+  sourceFaviconContainer: { width: 72, height: 72, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', justifyContent: 'center', alignItems: 'center', padding: 12 },
+  sourceFavicon: { width: 48, height: 48 },
+  sourceNameLabel: { fontSize: 11, color: 'rgba(255,255,255,0.45)', letterSpacing: 2.5, fontWeight: '600', textTransform: 'uppercase' }
 });

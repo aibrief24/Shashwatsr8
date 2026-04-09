@@ -6,7 +6,8 @@ import { Home, LayoutGrid, Bookmark, Settings } from 'lucide-react-native';
 
 export default function TabsLayout() {
   useEffect(() => {
-    console.log('[DEBUG-CRASH] tabs mount');
+    console.log('[DEBUG-CRASH] tabs layout mount');
+    console.log('[DEBUG-CRASH] tab screen registration');
   }, []);
 
   return (
