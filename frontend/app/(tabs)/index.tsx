@@ -234,6 +234,7 @@ export default function HomeFeed() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [offset, setOffset] = useState(0);
   const { setFeedArticlesCache } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -258,10 +259,11 @@ export default function HomeFeed() {
 
   const loadArticles = async () => {
     try {
-      const res = await api.getArticles();
+      const res = await api.getArticles(undefined, 15, 0);
       const loaded = res.articles || [];
       setArticles(loaded);
       setFeedArticlesCache(loaded);
+      setOffset(15);
 
       // Execute aggressive native prefetch to eliminate rapid scroll jank
       const validImages = loaded.map((a: any) => a.image_url).filter(Boolean);
@@ -272,6 +274,28 @@ export default function HomeFeed() {
       console.log('Failed to load articles:', e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMore = async () => {
+    try {
+      const res = await api.getArticles(undefined, 15, offset);
+      if (res.articles && res.articles.length > 0) {
+        setArticles(prev => {
+          const existingIds = new Set(prev.map(a => a.id));
+          const newItems = res.articles.filter((a: any) => !existingIds.has(a.id));
+          return [...prev, ...newItems];
+        });
+        setFeedArticlesCache(prev => {
+          const existingIds = new Set(prev.map((a: any) => a.id));
+          const newItems = res.articles.filter((a: any) => !existingIds.has(a.id));
+          return [...prev, ...newItems];
+        });
+        setOffset(prev => prev + 15);
+        Image.prefetch(res.articles.map((a: any) => a.image_url).filter(Boolean));
+      }
+    } catch (e) {
+      console.log('Load more failed', e);
     }
   };
 
@@ -360,6 +384,8 @@ export default function HomeFeed() {
         decelerationRate="fast"
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
+        onEndReached={loadMore}
+        onEndReachedThreshold={1.5}
         windowSize={3}
         initialNumToRender={2}
         maxToRenderPerBatch={2}

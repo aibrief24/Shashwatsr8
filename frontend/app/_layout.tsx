@@ -77,19 +77,16 @@ function NotificationObserver() {
 
   useEffect(() => {
     if (user?.id && token) {
-      console.log('[DEBUG] Scheduling Push Registration 3 seconds deferred');
-      const timer = setTimeout(() => {
-        InteractionManager.runAfterInteractions(() => {
-          registerForPushNotificationsAsync().then((pushToken) => {
-            if (pushToken) {
-              api.registerPushToken(pushToken, Platform.OS, token)
-                .then(() => console.log('[DEBUG] Token safely registered on backend'))
-                .catch((e: any) => console.error('[DEBUG] Token register error:', e));
-            }
-          }).catch((err: any) => console.log('[DEBUG] Safe catch of push token generation failure:', err));
-        });
-      }, 3000);
-      return () => clearTimeout(timer);
+      console.log('[DEBUG] Immediate Push Registration (No Timeout to avoid Android 13 prompt suppression)');
+      InteractionManager.runAfterInteractions(() => {
+        registerForPushNotificationsAsync().then((pushToken) => {
+          if (pushToken) {
+            api.registerPushToken(pushToken, Platform.OS, token)
+              .then(() => console.log('[DEBUG] Token safely registered on backend'))
+              .catch((e: any) => console.error('[DEBUG] Token register error:', e));
+          }
+        }).catch((err: any) => console.log('[DEBUG] Safe catch of push token generation failure:', err));
+      });
     }
   }, [user?.id, token]);
 

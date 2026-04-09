@@ -33,6 +33,8 @@ export default function CategoriesScreen() {
   const [articles, setArticles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [catLoading, setCatLoading] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -51,15 +53,36 @@ export default function CategoriesScreen() {
     setSelectedCat(name);
     setArticles([]);
     setCatLoading(true);
+    setOffset(0);
+    setHasMore(true);
     // Defer API to unblock rapid UI navigation flashes
     setTimeout(async () => {
       try {
-        const res = await api.getArticles(name);
+        const res = await api.getArticles(name, 15, 0);
         setArticles(res.articles || []);
+        if ((res.articles || []).length < 15) setHasMore(false);
+        setOffset(15);
       } catch { } finally {
         setCatLoading(false);
       }
     }, 50);
+  };
+
+  const loadMore = async () => {
+    if (!hasMore || catLoading) return;
+    try {
+      const res = await api.getArticles(selectedCat!, 15, offset);
+      const newArts = res.articles || [];
+      if (newArts.length > 0) {
+        setArticles(prev => {
+          const existing = new Set(prev.map(a => a.id));
+          return [...prev, ...newArts.filter((a: any) => !existing.has(a.id))];
+        });
+        setOffset(prev => prev + 15);
+      } else {
+        setHasMore(false);
+      }
+    } catch { }
   };
 
   if (selectedCat) {
@@ -81,6 +104,8 @@ export default function CategoriesScreen() {
             data={articles}
             keyExtractor={item => item.id}
             contentContainerStyle={styles.listContent}
+            onEndReached={loadMore}
+            onEndReachedThreshold={0.5}
             renderItem={({ item }) => (
               <TouchableOpacity testID={`cat-article-${item.id}`} style={styles.articleCard} onPress={() => router.push(`/article/${item.id}` as any)} activeOpacity={0.8}>
                 <Image source={{ uri: item.thumbnail_url || item.image_url }} style={styles.articleImage} contentFit="cover" transition={200} cachePolicy="memory-disk" placeholder="#080e1e" />
