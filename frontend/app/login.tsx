@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Colors, FontSize, Spacing, Radius } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react-native';
+import NotificationPromptModal from '@/components/NotificationPromptModal';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -12,6 +13,7 @@ export default function LoginScreen() {
   const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
   const { login } = useAuth();
   const router = useRouter();
 
@@ -22,9 +24,8 @@ export default function LoginScreen() {
     try {
       console.log('[DEBUG-LOGIN-FLOW] Calling login()');
       await login(email, password);
-      console.log('[DEBUG-CRASH] redirect start');
-      router.replace('/(tabs)');
-      console.log('[DEBUG-LOGIN-FLOW] Stack completely replaced.');
+      console.log('[DEBUG-CRASH] login successful, showing notification prompt');
+      setShowNotificationModal(true);
     } catch (e: any) {
       const msg = (e.message || '').toLowerCase();
       let safeMsg = 'Login failed. Please check your credentials.';
@@ -86,6 +87,14 @@ export default function LoginScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      <NotificationPromptModal
+        visible={showNotificationModal}
+        onComplete={() => {
+          console.log('[DEBUG-CRASH] redirect start');
+          router.replace('/(tabs)');
+          console.log('[DEBUG-LOGIN-FLOW] Stack completely replaced.');
+        }}
+      />
     </LinearGradient>
   );
 }

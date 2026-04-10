@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Colors, FontSize, Radius } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Mail, Lock, User, Eye, EyeOff } from 'lucide-react-native';
+import NotificationPromptModal from '@/components/NotificationPromptModal';
 
 export default function SignupScreen() {
   const [name, setName] = useState('');
@@ -14,6 +15,7 @@ export default function SignupScreen() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
   const { signup } = useAuth();
   const router = useRouter();
 
@@ -28,7 +30,7 @@ export default function SignupScreen() {
       if (res?.needsConfirmation) {
         setSuccess('Account created successfully.\n\nPlease check your email to verify your account before signing in. (Check your spam folder if it does not arrive within a few minutes)');
       } else {
-        router.replace('/(tabs)');
+        setShowNotificationModal(true);
       }
     } catch (e: any) {
       const msg = (e.message || '').toLowerCase();
@@ -94,6 +96,10 @@ export default function SignupScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      <NotificationPromptModal
+        visible={showNotificationModal}
+        onComplete={() => router.replace('/(tabs)')}
+      />
     </LinearGradient>
   );
 }
