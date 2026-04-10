@@ -482,7 +482,7 @@ def send_notification(article_id: str = ""):
 
 @api_router.post("/admin/ingest")
 def trigger_ingestion():
-    """Trigger content ingestion pipeline. Sends push notifications only for newly added articles."""
+    """Trigger content ingestion pipeline. Sends push notifications only for newly added important articles."""
     try:
         from ingestor import run_ingestion
         result = run_ingestion()
@@ -492,24 +492,59 @@ def trigger_ingestion():
 
         if new_ids:
             try:
-                token_rows = query("SELECT token FROM push_tokens")
-                tokens = [r['token'] for r in (token_rows or [])]
-                if tokens:
-                    count = len(new_ids)
-                    # Fetch one representative article title for the notification
-                    sample_rows = query(
-                        "SELECT title FROM articles WHERE id = %s::uuid LIMIT 1",
-                        (new_ids[0],)
-                    )
-                    sample_title = sample_rows[0]["title"][:60] if sample_rows else "New AI stories"
-                    push_result = send_expo_notifications(
-                        tokens,
-                        "🤖 New on AIBrief24",
-                        f"{count} new article{'s' if count > 1 else ''} — {sample_title}",
-                        data={"type": "new_articles", "article_id": new_ids[0]}
-                    )
+                # 1. Fetch newly ingested articles
+                new_articles = query(
+                    "SELECT id, title, summary, category, is_breaking FROM articles WHERE id = ANY(%s::uuid[])",
+                    (new_ids,)
+                )
+                
+                important_categories = {"AI Models", "Funding News", "Product Launches", "Big Tech AI"}
+                notify_article = None
+                
+                # 2. Pick the first "important" article
+                for art in (new_articles or []):
+                    title = str(art.get("title", ""))
+                    # Avoid empty or weak titles
+                    if len(title.strip()) <= 15:
+                        continue
+                        
+                    if art.get("is_breaking") or art.get("category") in important_categories:
+                        notify_article = art
+                        break
+                
+                if notify_article:
+                    token_rows = query("SELECT token FROM push_tokens")
+                    tokens = [r['token'] for r in (token_rows or [])]
+                    
+                    if tokens:
+                        a_id = notify_article["id"]
+                        a_title = notify_article["title"]
+                        a_cat = notify_article["category"]
+                        
+                        body_text = a_title[:100] + ("..." if len(a_title) > 100 else "")
+                        
+                        push_result = send_expo_notifications(
+                            tokens,
+                            "AIBrief24",
+                            body_text,
+                            data={
+                                "type": "new_article", 
+                                "article_id": str(a_id), 
+                                "category": a_cat, 
+                                "deep_link": f"aibrief24://article/{a_id}"
+                            }
+                        )
+                        
+                        try:
+                            # Log the results of notification batch
+                            insert_returning(
+                                "INSERT INTO notification_logs (article_id, status, provider_response) VALUES (%s, %s, %s) RETURNING id",
+                                (str(a_id), "sent", str(push_result))
+                            )
+                        except Exception as el:
+                            logger.warning(f"Notification log error: {el}")
 
-                # Mark all new articles as notification_sent regardless of token count
+                # 3. Mark all new articles as evaluated (notification_sent = true)
                 from database import _pool as pool_ref
                 conn = pool_ref.getconn()
                 try:
