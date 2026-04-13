@@ -11,6 +11,7 @@ import os
 import sys
 import uuid
 import logging
+import re
 import feedparser
 import requests
 from urllib.parse import urlparse
@@ -261,8 +262,39 @@ def _detect_category_strict(title: str, text: str) -> tuple[str, float, list[str
     return best_cat, max_score, list(set(rejection_reasons))
 
 
+def _clean_summary_text(text: str) -> str:
+    """Fallback cleanup to remove weak external-link phrases if the AI fails the prompt."""
+    bad_prefixes = [
+        "for more information",
+        "for more details",
+        "you can read more",
+        "read more at",
+        "read more on",
+        "visit the provided",
+        "visit the link",
+        "check the source",
+        "check out the source",
+        "learn more at",
+        "learn more on",
+        "to learn more",
+    ]
+    
+    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    cleaned = []
+    for s in sentences:
+        s_lower = s.lower()
+        if any(bad in s_lower for bad in bad_prefixes):
+            continue
+        cleaned.append(s)
+        
+    res = " ".join(cleaned).strip()
+    if res and res[-1] not in ".!?":
+        res += "."
+    return res or text
+
+
 def _generate_summary(title: str, content: str) -> str:
-    """Use OpenAI to generate a 2-3 sentence summary. Falls back to truncated content."""
+    """Use OpenAI to generate a premium, informative summary. Falls back to truncated content."""
     if not _openai_available or not content.strip():
         return (content[:400] + "...") if len(content) > 400 else (content or title)
 
@@ -272,17 +304,26 @@ def _generate_summary(title: str, content: str) -> str:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a concise AI news summarizer. Write 2-3 clear, informative sentences. No fluff, no markdown.",
+                    "content": (
+                        "You are an elite tech journalist and AI news summarizer for a premium app. "
+                        "Write a concise but highly informative summary (3-4 sentences). "
+                        "Explain exactly what happened, what the product/model does, why it matters, and who it affects. "
+                        "For startups or product launches, clearly explain the core value proposition. "
+                        "NEVER use phrases like 'read more', 'for more details', or 'visit the link'. "
+                        "Make the summary feel completely self-contained so the user understands the news without clicking away. "
+                        "No fluff, no greetings, no markdown."
+                    ),
                 },
                 {
                     "role": "user",
                     "content": f"Summarize:\n\nTitle: {title}\n\nContent: {content[:3000]}",
                 },
             ],
-            max_tokens=150,
+            max_tokens=200,
             temperature=0.4,
         )
-        return resp.choices[0].message.content.strip()
+        summary = resp.choices[0].message.content.strip()
+        return _clean_summary_text(summary)
     except Exception as e:
         logger.warning(f"OpenAI summary failed: {e}")
         return (content[:400] + "...") if len(content) > 400 else (content or title)
