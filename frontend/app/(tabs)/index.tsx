@@ -110,6 +110,23 @@ const ArticleCard = React.memo(({ article, index, handleShare, TAB_BAR_OFFSET, C
     setExpanded(!expanded);
   };
 
+  const renderCTAButtons = () => (
+    <View style={styles.ctaSection}>
+      {(() => { console.log('[DEBUG-CRASH] CTA buttons section render'); return null; })()}
+      <Text style={styles.ctaText}>Explore more verified AI stories</Text>
+      <View style={styles.ctaBtns}>
+        <TouchableOpacity testID={`telegram-btn-${index}`} style={styles.ctaBtn} onPress={() => Linking.openURL(TELEGRAM_URL)}>
+          <Send size={14} color={Colors.primary} />
+          <Text style={styles.ctaBtnText} numberOfLines={1}>Telegram</Text>
+        </TouchableOpacity>
+        <TouchableOpacity testID={`website-btn-${index}`} style={[styles.ctaBtn, { backgroundColor: Colors.surfaceHighlight }]} onPress={() => Linking.openURL(WEBSITE_URL)}>
+          <Globe size={14} color={Colors.textPrimary} />
+          <Text style={[styles.ctaBtnText, { color: Colors.textPrimary }]} numberOfLines={1}>Website</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   return (
     <View style={[styles.page, { height: CARD_HEIGHT }]}>
       <TouchableOpacity
@@ -234,20 +251,7 @@ const ArticleCard = React.memo(({ article, index, handleShare, TAB_BAR_OFFSET, C
             </View>
           </View>
 
-          <View style={styles.ctaSection}>
-            {(() => { console.log('[DEBUG-CRASH] CTA buttons section render'); return null; })()}
-            <Text style={styles.ctaText}>Explore more verified AI stories</Text>
-            <View style={styles.ctaBtns}>
-              <TouchableOpacity testID={`telegram-btn-${index}`} style={styles.ctaBtn} onPress={() => Linking.openURL(TELEGRAM_URL)}>
-                <Send size={14} color={Colors.primary} />
-                <Text style={styles.ctaBtnText} numberOfLines={1}>Telegram</Text>
-              </TouchableOpacity>
-              <TouchableOpacity testID={`website-btn-${index}`} style={[styles.ctaBtn, { backgroundColor: Colors.surfaceHighlight }]} onPress={() => Linking.openURL(WEBSITE_URL)}>
-                <Globe size={14} color={Colors.textPrimary} />
-                <Text style={[styles.ctaBtnText, { color: Colors.textPrimary }]} numberOfLines={1}>Website</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          {renderCTAButtons()}
         </View>
       </TouchableOpacity>
     </View>
@@ -355,10 +359,8 @@ export default function HomeFeed() {
         </TouchableOpacity>
       </View>
 
-      {loading ? (
-        <AnimatedSkeleton CARD_HEIGHT={CARD_HEIGHT} TAB_BAR_OFFSET={TAB_BAR_OFFSET} />
-      ) : (
-        <>
+      {loading ? (() => <AnimatedSkeleton key="skeleton-loader" CARD_HEIGHT={CARD_HEIGHT} TAB_BAR_OFFSET={TAB_BAR_OFFSET} />)() : (() => (
+        <View key="feed-loaded-container" style={{ flex: 1 }}>
           <FlatList
             ref={flatListRef}
             testID="feed-list"
@@ -379,12 +381,13 @@ export default function HomeFeed() {
             ListHeaderComponent={() => {
               console.log('[DEBUG-CRASH] header/footer render');
               console.log('[DEBUG-CRASH] FlatList header render');
-              return null;
+              return <View />;
             }}
             ListFooterComponent={() => {
               console.log('[DEBUG-CRASH] FlatList footer render');
-              return null;
+              return <View />;
             }}
+            ListEmptyComponent={() => <View />}
             getItemLayout={(_, index) => ({ length: CARD_HEIGHT, offset: CARD_HEIGHT * index, index })}
             contentContainerStyle={{ paddingBottom: TAB_BAR_OFFSET }}
           />
@@ -392,8 +395,8 @@ export default function HomeFeed() {
           <View pointerEvents="none" style={[styles.pageCounter, { bottom: TAB_BAR_OFFSET + 12 }]}>
             <Text style={styles.pageCounterText}>{currentIndex + 1}/{articles.length}</Text>
           </View>
-        </>
-      )}
+        </View>
+      ))()}
     </View>
   );
 }
