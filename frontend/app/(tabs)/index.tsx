@@ -127,6 +127,30 @@ const ArticleCard = React.memo(({ article, index, handleShare, TAB_BAR_OFFSET, C
     </View>
   );
 
+  const renderSummaryBlock = () => (
+    <View style={styles.summaryContainer}>
+      <Text style={styles.articleSummary} numberOfLines={expanded ? undefined : 4} ellipsizeMode="tail">{article.summary}</Text>
+      <TouchableOpacity onPress={handleExpand} style={styles.expandBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <Text style={styles.expandBtnText}>{expanded ? 'Read less' : 'Read more'}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderActionsBlock = () => (
+    <View style={styles.actions}>
+      <TouchableOpacity testID={`read-full-btn-${index}`} style={styles.readBtn} onPress={() => Linking.openURL(article.article_url)} activeOpacity={0.8}>
+        <ExternalLink size={16} color="#fff" />
+        <Text style={styles.readBtnText}>Full Article</Text>
+      </TouchableOpacity>
+      <View style={styles.actionsRight}>
+        <TouchableOpacity testID={`share-btn-${index}`} style={styles.actionBtn} onPress={() => handleShare(article)}>
+          <Share2 size={18} color={Colors.textSecondary} strokeWidth={2} />
+        </TouchableOpacity>
+        <BookmarkButton article={article} />
+      </View>
+    </View>
+  );
+
   return (
     <View style={[styles.page, { height: CARD_HEIGHT }]}>
       <TouchableOpacity
@@ -231,25 +255,8 @@ const ArticleCard = React.memo(({ article, index, handleShare, TAB_BAR_OFFSET, C
             </View>
           </View>
 
-          <View style={styles.summaryContainer}>
-            <Text style={styles.articleSummary} numberOfLines={expanded ? undefined : 4} ellipsizeMode="tail">{article.summary}</Text>
-            <TouchableOpacity onPress={handleExpand} style={styles.expandBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Text style={styles.expandBtnText}>{expanded ? 'Read less' : 'Read more'}</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.actions}>
-            <TouchableOpacity testID={`read-full-btn-${index}`} style={styles.readBtn} onPress={() => Linking.openURL(article.article_url)} activeOpacity={0.8}>
-              <ExternalLink size={16} color="#fff" />
-              <Text style={styles.readBtnText}>Full Article</Text>
-            </TouchableOpacity>
-            <View style={styles.actionsRight}>
-              <TouchableOpacity testID={`share-btn-${index}`} style={styles.actionBtn} onPress={() => handleShare(article)}>
-                <Share2 size={18} color={Colors.textSecondary} strokeWidth={2} />
-              </TouchableOpacity>
-              <BookmarkButton article={article} />
-            </View>
-          </View>
+          {renderSummaryBlock()}
+          {renderActionsBlock()}
 
           {renderCTAButtons()}
         </View>
@@ -334,69 +341,75 @@ export default function HomeFeed() {
     />
   ), [handleShare, TAB_BAR_OFFSET, CARD_HEIGHT]);
 
+  const renderHeaderLayout = () => (
+    <View style={[styles.header, { paddingTop: insets.top + 12, paddingBottom: 16, height: HEADER_HEIGHT }]}>
+      <View style={styles.headerLeft}>
+        <View style={styles.headerLogoBadge}>
+          <LinearGradient colors={[Colors.primary, Colors.secondary]} style={StyleSheet.absoluteFillObject} />
+          <Text style={styles.headerLogoText}>AI</Text>
+        </View>
+        <View>
+          <Text style={styles.headerTitle}>AIBrief24 MOCK</Text>
+          <Text style={styles.headerSub}>Isolating App Memory</Text>
+        </View>
+      </View>
+      <TouchableOpacity
+        testID="search-btn"
+        style={styles.headerBtn}
+        onPress={() => {
+          if (!loading) router.push('/search');
+        }}
+        activeOpacity={loading ? 1 : 0.2}
+      >
+        <Search size={20} color={Colors.textPrimary} strokeWidth={2} />
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderFeedLayout = () => (
+    <View key="feed-loaded-container" style={{ flex: 1 }}>
+      <FlatList
+        ref={flatListRef}
+        testID="feed-list"
+        data={articles}
+        renderItem={renderCard}
+        keyExtractor={item => item.id}
+        pagingEnabled
+        showsVerticalScrollIndicator={false}
+        snapToInterval={CARD_HEIGHT}
+        snapToAlignment="start"
+        decelerationRate="fast"
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        windowSize={3}
+        initialNumToRender={2}
+        maxToRenderPerBatch={2}
+        removeClippedSubviews={false}
+        ListHeaderComponent={() => {
+          console.log('[DEBUG-CRASH] header/footer render');
+          console.log('[DEBUG-CRASH] FlatList header render');
+          return <View />;
+        }}
+        ListFooterComponent={() => {
+          console.log('[DEBUG-CRASH] FlatList footer render');
+          return <View />;
+        }}
+        ListEmptyComponent={() => <View />}
+        getItemLayout={(_, index) => ({ length: CARD_HEIGHT, offset: CARD_HEIGHT * index, index })}
+        contentContainerStyle={{ paddingBottom: TAB_BAR_OFFSET }}
+      />
+
+      <View pointerEvents="none" style={[styles.pageCounter, { bottom: TAB_BAR_OFFSET + 12 }]}>
+        <Text style={styles.pageCounterText}>{currentIndex + 1}/{articles.length}</Text>
+      </View>
+    </View>
+  );
+
   return (
     <View testID="home-feed" style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + 12, paddingBottom: 16, height: HEADER_HEIGHT }]}>
-        <View style={styles.headerLeft}>
-          <View style={styles.headerLogoBadge}>
-            <LinearGradient colors={[Colors.primary, Colors.secondary]} style={StyleSheet.absoluteFillObject} />
-            <Text style={styles.headerLogoText}>AI</Text>
-          </View>
-          <View>
-            <Text style={styles.headerTitle}>AIBrief24 MOCK</Text>
-            <Text style={styles.headerSub}>Isolating App Memory</Text>
-          </View>
-        </View>
-        <TouchableOpacity
-          testID="search-btn"
-          style={styles.headerBtn}
-          onPress={() => {
-            if (!loading) router.push('/search');
-          }}
-          activeOpacity={loading ? 1 : 0.2}
-        >
-          <Search size={20} color={Colors.textPrimary} strokeWidth={2} />
-        </TouchableOpacity>
-      </View>
+      {renderHeaderLayout()}
 
-      {loading ? (() => <AnimatedSkeleton key="skeleton-loader" CARD_HEIGHT={CARD_HEIGHT} TAB_BAR_OFFSET={TAB_BAR_OFFSET} />)() : (() => (
-        <View key="feed-loaded-container" style={{ flex: 1 }}>
-          <FlatList
-            ref={flatListRef}
-            testID="feed-list"
-            data={articles}
-            renderItem={renderCard}
-            keyExtractor={item => item.id}
-            pagingEnabled
-            showsVerticalScrollIndicator={false}
-            snapToInterval={CARD_HEIGHT}
-            snapToAlignment="start"
-            decelerationRate="fast"
-            onViewableItemsChanged={onViewableItemsChanged}
-            viewabilityConfig={viewabilityConfig}
-            windowSize={3}
-            initialNumToRender={2}
-            maxToRenderPerBatch={2}
-            removeClippedSubviews={false}
-            ListHeaderComponent={() => {
-              console.log('[DEBUG-CRASH] header/footer render');
-              console.log('[DEBUG-CRASH] FlatList header render');
-              return <View />;
-            }}
-            ListFooterComponent={() => {
-              console.log('[DEBUG-CRASH] FlatList footer render');
-              return <View />;
-            }}
-            ListEmptyComponent={() => <View />}
-            getItemLayout={(_, index) => ({ length: CARD_HEIGHT, offset: CARD_HEIGHT * index, index })}
-            contentContainerStyle={{ paddingBottom: TAB_BAR_OFFSET }}
-          />
-
-          <View pointerEvents="none" style={[styles.pageCounter, { bottom: TAB_BAR_OFFSET + 12 }]}>
-            <Text style={styles.pageCounterText}>{currentIndex + 1}/{articles.length}</Text>
-          </View>
-        </View>
-      ))()}
+      {loading ? (() => <AnimatedSkeleton key="skeleton-loader" CARD_HEIGHT={CARD_HEIGHT} TAB_BAR_OFFSET={TAB_BAR_OFFSET} />)() : renderFeedLayout()}
     </View>
   );
 }
