@@ -5,6 +5,7 @@ import { Colors } from '@/constants/theme';
 import { Home, LayoutGrid, Bookmark, Settings } from 'lucide-react-native';
 
 export default function TabsLayout() {
+  console.log('[DEBUG-CRASH] tabs layout render');
   useEffect(() => {
     console.log('[DEBUG-CRASH] tabs layout mount');
     console.log('[DEBUG-CRASH] tab screen registration');

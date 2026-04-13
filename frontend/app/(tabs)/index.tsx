@@ -52,6 +52,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 const AnimatedSkeleton = ({ CARD_HEIGHT, TAB_BAR_OFFSET }: any) => {
+  console.log('[DEBUG-CRASH] skeleton render');
   const op = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
@@ -234,6 +235,7 @@ const ArticleCard = React.memo(({ article, index, handleShare, TAB_BAR_OFFSET, C
           </View>
 
           <View style={styles.ctaSection}>
+            {(() => { console.log('[DEBUG-CRASH] CTA buttons section render'); return null; })()}
             <Text style={styles.ctaText}>Explore more verified AI stories</Text>
             <View style={styles.ctaBtns}>
               <TouchableOpacity testID={`telegram-btn-${index}`} style={styles.ctaBtn} onPress={() => Linking.openURL(TELEGRAM_URL)}>
@@ -253,6 +255,7 @@ const ArticleCard = React.memo(({ article, index, handleShare, TAB_BAR_OFFSET, C
 });
 
 export default function HomeFeed() {
+  console.log('[DEBUG-CRASH] home render');
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -374,6 +377,7 @@ export default function HomeFeed() {
             maxToRenderPerBatch={2}
             removeClippedSubviews={false}
             ListHeaderComponent={() => {
+              console.log('[DEBUG-CRASH] header/footer render');
               console.log('[DEBUG-CRASH] FlatList header render');
               return null;
             }}
