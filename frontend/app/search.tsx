@@ -150,13 +150,13 @@ export default function SearchScreen() {
               </View>
             </TouchableOpacity>
           )}
-          ListEmptyComponent={
+          ListEmptyComponent={() => (
             <View style={styles.empty}>
               <Search size={40} color={Colors.textTertiary} strokeWidth={1} />
               <Text style={styles.emptyTitle}>No results found</Text>
               <Text style={styles.emptyDesc}>Try searching for a different topic</Text>
             </View>
-          }
+          )}
         />
       )}
     </View>

@@ -66,13 +66,13 @@ export default function BookmarksScreen() {
             </TouchableOpacity>
           </TouchableOpacity>
         )}
-        ListEmptyComponent={
+        ListEmptyComponent={() => (
           <View style={styles.empty}>
             <Bookmark size={48} color={Colors.textTertiary} strokeWidth={1} />
             <Text style={styles.emptyTitle}>No saved articles</Text>
             <Text style={styles.emptyDesc}>Bookmark articles from the feed to read them later</Text>
           </View>
-        }
+        )}
       />
     </View>
   );

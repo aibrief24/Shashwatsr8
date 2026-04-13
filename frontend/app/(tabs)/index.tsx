@@ -327,30 +327,6 @@ export default function HomeFeed() {
     />
   ), [handleShare, TAB_BAR_OFFSET, CARD_HEIGHT]);
 
-  if (loading) {
-    return (
-      <View testID="home-feed" style={styles.container}>
-        <View style={[styles.header, { paddingTop: insets.top + 12, paddingBottom: 16, height: HEADER_HEIGHT }]}>
-          <View style={styles.headerLeft}>
-            <View style={styles.headerLogoBadge}>
-              <LinearGradient colors={[Colors.primary, Colors.secondary]} style={StyleSheet.absoluteFillObject} />
-              <Text style={styles.headerLogoText}>AI</Text>
-            </View>
-            <View>
-              <Text style={styles.headerTitle}>AIBrief24 MOCK</Text>
-              <Text style={styles.headerSub}>Isolating App Memory</Text>
-            </View>
-          </View>
-          <View style={styles.headerBtn}>
-            <Search size={20} color={Colors.textPrimary} strokeWidth={2} />
-          </View>
-        </View>
-
-        <AnimatedSkeleton CARD_HEIGHT={CARD_HEIGHT} TAB_BAR_OFFSET={TAB_BAR_OFFSET} />
-      </View>
-    );
-  }
-
   return (
     <View testID="home-feed" style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 12, paddingBottom: 16, height: HEADER_HEIGHT }]}>
@@ -364,35 +340,56 @@ export default function HomeFeed() {
             <Text style={styles.headerSub}>Isolating App Memory</Text>
           </View>
         </View>
-        <TouchableOpacity testID="search-btn" style={styles.headerBtn} onPress={() => router.push('/search')}>
+        <TouchableOpacity
+          testID="search-btn"
+          style={styles.headerBtn}
+          onPress={() => {
+            if (!loading) router.push('/search');
+          }}
+          activeOpacity={loading ? 1 : 0.2}
+        >
           <Search size={20} color={Colors.textPrimary} strokeWidth={2} />
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        ref={flatListRef}
-        testID="feed-list"
-        data={articles}
-        renderItem={renderCard}
-        keyExtractor={item => item.id}
-        pagingEnabled
-        showsVerticalScrollIndicator={false}
-        snapToInterval={CARD_HEIGHT}
-        snapToAlignment="start"
-        decelerationRate="fast"
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
-        windowSize={3}
-        initialNumToRender={2}
-        maxToRenderPerBatch={2}
-        removeClippedSubviews={false}
-        getItemLayout={(_, index) => ({ length: CARD_HEIGHT, offset: CARD_HEIGHT * index, index })}
-        contentContainerStyle={{ paddingBottom: TAB_BAR_OFFSET }}
-      />
+      {loading ? (
+        <AnimatedSkeleton CARD_HEIGHT={CARD_HEIGHT} TAB_BAR_OFFSET={TAB_BAR_OFFSET} />
+      ) : (
+        <>
+          <FlatList
+            ref={flatListRef}
+            testID="feed-list"
+            data={articles}
+            renderItem={renderCard}
+            keyExtractor={item => item.id}
+            pagingEnabled
+            showsVerticalScrollIndicator={false}
+            snapToInterval={CARD_HEIGHT}
+            snapToAlignment="start"
+            decelerationRate="fast"
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={viewabilityConfig}
+            windowSize={3}
+            initialNumToRender={2}
+            maxToRenderPerBatch={2}
+            removeClippedSubviews={false}
+            ListHeaderComponent={() => {
+              console.log('[DEBUG-CRASH] FlatList header render');
+              return null;
+            }}
+            ListFooterComponent={() => {
+              console.log('[DEBUG-CRASH] FlatList footer render');
+              return null;
+            }}
+            getItemLayout={(_, index) => ({ length: CARD_HEIGHT, offset: CARD_HEIGHT * index, index })}
+            contentContainerStyle={{ paddingBottom: TAB_BAR_OFFSET }}
+          />
 
-      <View pointerEvents="none" style={[styles.pageCounter, { bottom: TAB_BAR_OFFSET + 12 }]}>
-        <Text style={styles.pageCounterText}>{currentIndex + 1}/{articles.length}</Text>
-      </View>
+          <View pointerEvents="none" style={[styles.pageCounter, { bottom: TAB_BAR_OFFSET + 12 }]}>
+            <Text style={styles.pageCounterText}>{currentIndex + 1}/{articles.length}</Text>
+          </View>
+        </>
+      )}
     </View>
   );
 }

@@ -115,7 +115,7 @@ export default function CategoriesScreen() {
                 </View>
               </TouchableOpacity>
             )}
-            ListEmptyComponent={<Text style={styles.emptyText}>No articles in this category</Text>}
+            ListEmptyComponent={() => <Text style={styles.emptyText}>No articles in this category</Text>}
           />
         )}
       </View>
