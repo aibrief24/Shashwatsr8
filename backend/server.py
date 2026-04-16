@@ -537,25 +537,29 @@ def _require_admin(request: Request):
 
 # ─── Admin ────────────────────────────────────────────────────────────────────
 
-@api_router.post("/admin/ingest")
-def trigger_ingestion(background_tasks: BackgroundTasks, request: Request):
-    """Ingest articles, create notification jobs, return fast. No inline push."""
-    _require_admin(request)
+def _run_ingestion_background():
+    """Background task: ingest articles then create notification jobs.
+    Runs AFTER the HTTP response has already been sent.
+    """
+    logger.info("[INGEST] background task started")
     try:
+        logger.info("[INGEST] before run_ingestion()")
         from ingestor import run_ingestion
         result = run_ingestion()
+        logger.info("[INGEST] after run_ingestion()")
 
         new_ids = result.get("new_article_ids", [])
-        jobs_created = 0
+        logger.info(f"[INGEST] new_article_ids count: {len(new_ids)}")
 
+        jobs_created = 0
         if new_ids:
+            logger.info("[INGEST] before notification job insert")
             try:
                 from database import _pool as pool_ref
                 conn = pool_ref.getconn()
                 try:
                     with conn.cursor() as cur:
                         for aid in new_ids:
-                            # ON CONFLICT DO NOTHING ensures idempotency
                             cur.execute("""
                                 INSERT INTO notification_jobs (article_id)
                                 VALUES (%s::uuid)
@@ -567,13 +571,22 @@ def trigger_ingestion(background_tasks: BackgroundTasks, request: Request):
                 finally:
                     pool_ref.putconn(conn)
             except Exception as e:
-                logger.warning(f"Job creation error: {e}")
+                logger.warning(f"[INGEST] job creation error: {e}")
+            logger.info(f"[INGEST] after notification job insert: {jobs_created} jobs created")
 
-        result["push_jobs_created"] = jobs_created
-        return result
+        logger.info(f"[INGEST] background task done — articles={result.get('total',0)}, jobs={jobs_created}")
     except Exception as e:
-        logger.error(f"Ingestion error: {e}")
-        raise HTTPException(500, f"Ingestion failed: {str(e)}")
+        logger.error(f"[INGEST] background task error: {e}")
+
+
+@api_router.post("/admin/ingest")
+def trigger_ingestion(background_tasks: BackgroundTasks, request: Request):
+    """Return immediately. Heavy ingestion + job creation runs in the background."""
+    logger.info("[INGEST] route entered")
+    _require_admin(request)
+    logger.info("[INGEST] returning response")
+    background_tasks.add_task(_run_ingestion_background)
+    return {"status": "accepted", "message": "Ingestion started in background. Poll /admin/notification-status to track progress."}
 
 
 @api_router.post("/admin/process-notifications")
