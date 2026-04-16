@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Request, BackgroundTasks
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 import os
@@ -37,7 +37,7 @@ def _run_migrations():
         from database import _pool
         conn = _pool.getconn()
         with conn.cursor() as cur:
-            # 1. push_tokens table
+            # ── core tables ────────────────────────────────────────────────────
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS push_tokens (
                     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -48,7 +48,6 @@ def _run_migrations():
                 )
             """)
 
-            # 2. notification_logs table
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS notification_logs (
                     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -59,14 +58,68 @@ def _run_migrations():
                 )
             """)
 
-            # 2. Unique index on article_url to prevent duplicates
+            # ── notification_jobs ──────────────────────────────────────────────
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS notification_jobs (
+                    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    article_id    UUID NOT NULL,
+                    status        TEXT NOT NULL DEFAULT 'pending',
+                    attempt_count INT  NOT NULL DEFAULT 0,
+                    max_attempts  INT  NOT NULL DEFAULT 3,
+                    scheduled_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    processed_at  TIMESTAMPTZ,
+                    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    error         TEXT
+                )
+            """)
+            cur.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_notif_jobs_article
+                    ON notification_jobs(article_id)
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_notif_jobs_status_sched
+                    ON notification_jobs(status, scheduled_at)
+            """)
+
+            # ── push_tokens hygiene columns ────────────────────────────────────
+            for col_sql in [
+                "ALTER TABLE push_tokens ADD COLUMN IF NOT EXISTS is_active       BOOLEAN     DEFAULT true",
+                "ALTER TABLE push_tokens ADD COLUMN IF NOT EXISTS last_success_at TIMESTAMPTZ",
+                "ALTER TABLE push_tokens ADD COLUMN IF NOT EXISTS last_error       TEXT",
+                "ALTER TABLE push_tokens ADD COLUMN IF NOT EXISTS updated_at       TIMESTAMPTZ DEFAULT NOW()",
+            ]:
+                cur.execute(col_sql)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_push_tokens_active ON push_tokens(is_active)
+            """)
+
+            # ── articles: production notification tracking ──────────────────────
+            for col_sql in [
+                "ALTER TABLE articles ADD COLUMN IF NOT EXISTS notification_status  TEXT",
+                "ALTER TABLE articles ADD COLUMN IF NOT EXISTS notification_sent_at TIMESTAMPTZ",
+                "ALTER TABLE articles ADD COLUMN IF NOT EXISTS notification_error   TEXT",
+            ]:
+                cur.execute(col_sql)
+
+            # ── notification_logs: richer per-send records ─────────────────────
+            for col_sql in [
+                "ALTER TABLE notification_logs ADD COLUMN IF NOT EXISTS job_id         TEXT",
+                "ALTER TABLE notification_logs ADD COLUMN IF NOT EXISTS token          TEXT",
+                "ALTER TABLE notification_logs ADD COLUMN IF NOT EXISTS ticket_id      TEXT",
+                "ALTER TABLE notification_logs ADD COLUMN IF NOT EXISTS receipt_status TEXT",
+                "ALTER TABLE notification_logs ADD COLUMN IF NOT EXISTS error          TEXT",
+            ]:
+                cur.execute(col_sql)
+
+            # ── article_url unique index ───────────────────────────────────────
             cur.execute("""
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_articles_article_url
                 ON articles(article_url)
                 WHERE article_url IS NOT NULL AND article_url != ''
             """)
 
-            # 3. Fix source_url: set to homepage domain from sources table
+            # ── source_url fixes (idempotent) ──────────────────────────────────
             cur.execute("""
                 UPDATE articles a
                 SET source_url = regexp_replace(s.url, '^(https?://[^/]+).*', '\\1')
@@ -75,16 +128,11 @@ def _run_migrations():
                   AND (a.source_url IS NULL OR a.source_url = '')
             """)
             sources_fixed = cur.rowcount
-
-            # 4. Clean any source_url that still has a path component (feed URLs etc.)
             cur.execute("""
                 UPDATE articles
                 SET source_url = regexp_replace(source_url, '^(https?://[^/]+).*', '\\1')
                 WHERE source_url ~ '^https?://[^/]+/.+'
             """)
-            path_fixed = cur.rowcount
-
-            # 5. Final fallback: extract domain from article_url for any remaining missing source_url
             cur.execute("""
                 UPDATE articles
                 SET source_url = regexp_replace(article_url, '^(https?://[^/]+).*', '\\1')
@@ -94,8 +142,7 @@ def _run_migrations():
             domain_fixed = cur.rowcount
 
             conn.commit()
-        logger.info(f"Migrations done: push_tokens ready, unique index on article_url, "
-                    f"source_url fixed for {sources_fixed + domain_fixed} articles")
+        logger.info(f"Migrations done: notification_jobs, push_tokens hygiene, articles tracking, notification_logs upgraded. source_url fixed for {sources_fixed + domain_fixed} articles")
     except Exception as e:
         if conn:
             try:
@@ -478,92 +525,80 @@ def send_notification(article_id: str = ""):
 
     return {"success": True, "sent": result.get("sent", 0), "errors": result.get("errors", 0), "tokens": len(token_list)}
 
+# ── Admin key guard ──────────────────────────────────────────────────────────
+ADMIN_KEY = os.getenv("ADMIN_KEY", "")
+
+def _require_admin(request: Request):
+    if not ADMIN_KEY:
+        return  # not configured — open in dev
+    key = request.headers.get("X-Admin-Key", "")
+    if key != ADMIN_KEY:
+        raise HTTPException(401, "Unauthorized")
+
 # ─── Admin ────────────────────────────────────────────────────────────────────
 
 @api_router.post("/admin/ingest")
-def trigger_ingestion():
-    """Trigger content ingestion pipeline. Sends push notifications only for newly added important articles."""
+def trigger_ingestion(background_tasks: BackgroundTasks, request: Request):
+    """Ingest articles, create notification jobs, return fast. No inline push."""
+    _require_admin(request)
     try:
         from ingestor import run_ingestion
         result = run_ingestion()
 
         new_ids = result.get("new_article_ids", [])
-        push_result = {"sent": 0, "errors": 0}
+        jobs_created = 0
 
         if new_ids:
             try:
-                # 1. Fetch newly ingested articles
-                new_articles = query(
-                    "SELECT id, title, summary, category, is_breaking FROM articles WHERE id = ANY(%s::uuid[])",
-                    (new_ids,)
-                )
-                
-                important_categories = {"AI Models", "Funding News", "Product Launches", "Big Tech AI"}
-                notify_article = None
-                
-                # 2. Pick the first "important" article
-                for art in (new_articles or []):
-                    title = str(art.get("title", ""))
-                    # Avoid empty or weak titles
-                    if len(title.strip()) <= 15:
-                        continue
-                        
-                    if art.get("is_breaking") or art.get("category") in important_categories:
-                        notify_article = art
-                        break
-                
-                if notify_article:
-                    token_rows = query("SELECT token FROM push_tokens")
-                    tokens = [r['token'] for r in (token_rows or [])]
-                    
-                    if tokens:
-                        a_id = notify_article["id"]
-                        a_title = notify_article["title"]
-                        a_cat = notify_article["category"]
-                        
-                        body_text = a_title[:100] + ("..." if len(a_title) > 100 else "")
-                        
-                        push_result = send_expo_notifications(
-                            tokens,
-                            "AIBrief24",
-                            body_text,
-                            data={
-                                "type": "new_article", 
-                                "article_id": str(a_id), 
-                                "category": a_cat, 
-                                "deep_link": f"aibrief24://article/{a_id}"
-                            }
-                        )
-                        
-                        try:
-                            # Log the results of notification batch
-                            insert_returning(
-                                "INSERT INTO notification_logs (article_id, status, provider_response) VALUES (%s, %s, %s) RETURNING id",
-                                (str(a_id), "sent", str(push_result))
-                            )
-                        except Exception as el:
-                            logger.warning(f"Notification log error: {el}")
-
-                # 3. Mark all new articles as evaluated (notification_sent = true)
                 from database import _pool as pool_ref
                 conn = pool_ref.getconn()
                 try:
                     with conn.cursor() as cur:
-                        cur.execute(
-                            "UPDATE articles SET notification_sent = true WHERE id = ANY(%s::uuid[])",
-                            (new_ids,)
-                        )
+                        for aid in new_ids:
+                            # ON CONFLICT DO NOTHING ensures idempotency
+                            cur.execute("""
+                                INSERT INTO notification_jobs (article_id)
+                                VALUES (%s::uuid)
+                                ON CONFLICT (article_id) DO NOTHING
+                            """, (str(aid),))
+                            if cur.rowcount:
+                                jobs_created += 1
                         conn.commit()
                 finally:
                     pool_ref.putconn(conn)
             except Exception as e:
-                logger.warning(f"Post-ingest notification error: {e}")
+                logger.warning(f"Job creation error: {e}")
 
-        result["push"] = push_result
+        result["push_jobs_created"] = jobs_created
         return result
     except Exception as e:
         logger.error(f"Ingestion error: {e}")
         raise HTTPException(500, f"Ingestion failed: {str(e)}")
+
+
+@api_router.post("/admin/process-notifications")
+def process_notifications(request: Request):
+    """Run the notification worker — claim pending jobs, send, poll receipts."""
+    _require_admin(request)
+    try:
+        from notification_worker import run_pending_jobs
+        result = run_pending_jobs(limit=50)
+        return {"success": True, **result}
+    except Exception as e:
+        logger.error(f"Notification worker error: {e}")
+        raise HTTPException(500, str(e))
+
+
+@api_router.get("/admin/notification-status")
+def notification_status(request: Request):
+    """Return queue stats and token health — useful for monitoring."""
+    _require_admin(request)
+    try:
+        from notification_worker import get_queue_status
+        return get_queue_status()
+    except Exception as e:
+        logger.error(f"Notification status error: {e}")
+        raise HTTPException(500, str(e))
 
 @api_router.post("/admin/recategorize")
 def recategorize_articles():
