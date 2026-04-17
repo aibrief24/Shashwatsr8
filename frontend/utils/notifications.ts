@@ -47,9 +47,10 @@ export async function requestAndRegisterPushToken(authToken: string): Promise<bo
 
         try {
             console.log('[PUSH-FLOW] token generation start');
-            token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+            const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
+            token = tokenResponse.data;
             console.log('[PUSH-FLOW] token generation end');
-            console.log(`[PUSH-FLOW] generated Expo push token value presence: ${!!token}`);
+            console.log('[PUSH-FLOW] expo token value:', token);
 
             if (token) {
                 console.log('[PUSH-FLOW] backend /push/register start');

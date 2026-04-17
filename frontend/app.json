@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "aibrief24",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.aibrief24.app",
