@@ -20,7 +20,11 @@
     },
     "android": {
       "package": "com.aibrief24.app",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#020617"
+      }
     },
     "web": {
       "bundler": "metro",
