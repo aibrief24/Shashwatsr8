@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Image as RNImage } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { Colors, FontSize, Spacing, Radius } from '@/constants/theme';
@@ -45,8 +45,7 @@ export default function LoginScreen() {
           <View testID="login-screen" style={styles.content}>
             <View style={styles.header}>
               <View style={styles.logoBadge}>
-                <LinearGradient colors={[Colors.primary, Colors.secondary]} style={StyleSheet.absoluteFillObject} />
-                <Text style={styles.logoText}>AI</Text>
+                <RNImage source={require('@/assets/images/icon.png')} style={styles.logoImage} resizeMode="contain" />
               </View>
               <Text style={styles.title}>Welcome Back</Text>
               <Text style={styles.subtitle}>Sign in to your AIBrief24 account</Text>
@@ -95,7 +94,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 32, paddingVertical: 40 },
   header: { alignItems: 'center', marginBottom: 40 },
   logoBadge: { width: 72, height: 72, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginBottom: 24, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10, overflow: 'hidden' },
-  logoText: { fontSize: 26, fontWeight: '900', color: '#fff', letterSpacing: 1 },
+  logoImage: { width: '100%', height: '100%' },
   title: { fontSize: 28, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5, marginBottom: 8 },
   subtitle: { fontSize: 15, color: Colors.textSecondary },
   errorBox: { backgroundColor: Colors.error + '20', borderRadius: Radius.md, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: Colors.error + '50' },

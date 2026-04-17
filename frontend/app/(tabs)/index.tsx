@@ -614,11 +614,11 @@ export default function HomeFeed() {
     >
       <View style={styles.headerLeft}>
         <View style={styles.headerLogoBadge}>
-          <LinearGradient
-            colors={[Colors.primary, Colors.secondary]}
-            style={StyleSheet.absoluteFillObject}
+          <RNImage
+            source={require('@/assets/images/icon.png')}
+            style={styles.headerLogoImage}
+            resizeMode="contain"
           />
-          <Text style={styles.headerLogoText}>AI</Text>
         </View>
         <View>
           <Text style={styles.headerTitle}>AIBrief24</Text>
@@ -790,11 +790,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
   },
-  headerLogoText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#fff',
-    letterSpacing: 0.5,
+  headerLogoImage: {
+    width: '100%',
+    height: '100%',
   },
   headerTitle: {
     fontSize: FontSize.lg,
