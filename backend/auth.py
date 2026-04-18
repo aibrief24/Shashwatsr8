@@ -97,6 +97,20 @@ def supabase_update_password(access_token: str, new_password: str):
     return {"success": True, "message": "Password updated successfully"}
 
 
+def supabase_exchange_code(code: str):
+    # Try PKCE exchange. If code_verifier was empty when standard recovery was generated, it usually accepts empty parameters dynamically or defaults internally.
+    res = _http.post(
+        f"{AUTH_URL}/token?grant_type=pkce",
+        json={"auth_code": code, "code_verifier": ""},
+        headers=HEADERS,
+    )
+    if res.status_code >= 400:
+        data = res.json()
+        msg = data.get("error_description") or data.get("msg") or "Failed to exchange recovery code"
+        raise HTTPException(res.status_code, msg)
+    return res.json()
+
+
 def supabase_logout(access_token: str):
     _http.post(
         f"{AUTH_URL}/logout",

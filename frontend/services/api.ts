@@ -78,6 +78,9 @@ export const api = {
   updatePassword: (access_token: string, new_password: string) =>
     request('/auth/update-password', { method: 'POST', body: JSON.stringify({ access_token, new_password }) }),
 
+  exchangeCode: (code: string) =>
+    request('/auth/exchange-code', { method: 'POST', body: JSON.stringify({ code }) }),
+
   // Articles
   getArticles: (category?: string, limit = 15, offset = 0) => {
     const params = new URLSearchParams();

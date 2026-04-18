@@ -14,29 +14,41 @@ export default function ResetPasswordScreen() {
 
     const router = useRouter();
     const [accessToken, setAccessToken] = useState<string | null>(null);
+    const [code, setCode] = useState<string | null>(null);
+
+    const matchParam = (url: string, param: string) => {
+        const regex = new RegExp(`[#?&]${param}=([^&]+)`);
+        const match = url.match(regex);
+        return match ? decodeURIComponent(match[1]) : null;
+    };
 
     const parseDeepLink = (url: string | null) => {
         if (!url) return;
-        console.log(`[RESET-PASSWORD] initial url: ${url}`);
+        console.log(`[RESET-PASSWORD] full initial url: ${url}`);
 
         try {
-            const hashPart = url.split('#')[1] || url.split('?')[1];
-            if (!hashPart) {
-                console.log(`[RESET-PASSWORD] parsed hash keys: none`);
-                console.log(`[RESET-PASSWORD] access token present true/false: false`);
-                return;
-            }
+            const queryPart = url.split('?')[1] || '';
+            const hashPart = url.split('#')[1] || '';
 
-            const params = new URLSearchParams(hashPart);
-            const r_access_token = params.get('access_token');
-            const r_type = params.get('type');
+            const queryParams = new URLSearchParams(queryPart.split('#')[0]);
+            const hashParams = new URLSearchParams(hashPart);
 
-            console.log(`[RESET-PASSWORD] parsed hash keys: ${Array.from(params.keys()).join(', ')}`);
-            console.log(`[RESET-PASSWORD] access token present true/false: ${!!r_access_token}`);
-            console.log(`[RESET-PASSWORD] recovery type: ${r_type}`);
+            console.log(`[RESET-PASSWORD] query keys: ${Array.from(queryParams.keys()).join(', ')}`);
+            console.log(`[RESET-PASSWORD] hash keys: ${Array.from(hashParams.keys()).join(', ')}`);
 
-            if (r_access_token && r_type === 'recovery') {
-                setAccessToken(r_access_token);
+            const r_access_token = matchParam(url, 'access_token');
+            const r_refresh_token = matchParam(url, 'refresh_token');
+            const r_code = matchParam(url, 'code');
+            const r_type = matchParam(url, 'type');
+
+            console.log(`[RESET-PASSWORD] access_token present: ${!!r_access_token}`);
+            console.log(`[RESET-PASSWORD] refresh_token present: ${!!r_refresh_token}`);
+            console.log(`[RESET-PASSWORD] code present: ${!!r_code}`);
+            console.log(`[RESET-PASSWORD] type: ${r_type}`);
+
+            if (r_type === 'recovery') {
+                if (r_access_token) setAccessToken(r_access_token);
+                if (r_code) setCode(r_code);
             }
         } catch (e) {
             console.log(`[RESET-PASSWORD] parse error: ${e}`);
@@ -52,20 +64,34 @@ export default function ResetPasswordScreen() {
     const handleUpdate = async () => {
         if (!password.trim()) { setError('Please enter a new password'); return; }
         if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
-        if (!accessToken) {
-            setError('Invalid or expired reset link. Please try requesting a new one.');
+
+        if (!accessToken && !code) {
+            setError('This reset link is invalid or expired. Please request a new password reset email.');
             return;
         }
 
         setError('');
         setLoading(true);
         try {
-            const res = await api.updatePassword(accessToken, password);
-            console.log(`[RESET-PASSWORD] update password response: `, res);
+            let finalToken = accessToken;
+
+            // If we only have a PKCE code, exchange it for an access token natively
+            if (!finalToken && code) {
+                console.log(`[RESET-PASSWORD] Exchanging code for session natively...`);
+                const sessionRes = await api.exchangeCode(code);
+                finalToken = sessionRes.access_token;
+
+                if (!finalToken) {
+                    throw new Error('Failed to exchange code natively. Link may be expired.');
+                }
+            }
+
+            const res = await api.updatePassword(finalToken as string, password);
+            console.log(`[RESET-PASSWORD] update response status: `, res?.success ? 'success' : 'failed');
             setSuccess(true);
         } catch (e: any) {
             console.log(`[RESET-PASSWORD] update password error: `, e);
-            setError(e.message || 'Failed to update password. Link may be expired.');
+            setError('This reset link is invalid or expired. Please request a new password reset email.');
         } finally {
             setLoading(false);
         }

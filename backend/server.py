@@ -313,6 +313,15 @@ def update_password(req: UpdatePasswordRequest):
     return supabase_update_password(req.access_token, req.new_password)
 
 
+class ExchangeCodeRequest(BaseModel):
+    code: str
+
+@api_router.post("/auth/exchange-code")
+def exchange_code(req: ExchangeCodeRequest):
+    from auth import supabase_exchange_code
+    return supabase_exchange_code(req.code)
+
+
 @api_router.post("/auth/logout")
 def logout(request: Request):
     auth_header = request.headers.get("Authorization", "")
