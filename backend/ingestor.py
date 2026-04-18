@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-from database import query, execute
+from database import query, execute, insert_returning
 from image_optimizer import optimize_image_url
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -548,7 +548,7 @@ def ingest_source(source: dict, seen_images: set, dry_run: bool = False) -> dict
     """Ingest articles from a single RSS source.
     Returns metrics dict.
     """
-    metrics = {"new_ids": [], "rejected_non_ai": 0, "skipped_as_tutorial": 0, "errors": 0, "feed_error": False}
+    metrics = {"new_ids": [], "errors": 0, "rejected_non_ai": 0, "skipped_as_tutorial": 0, "jobs_created": 0, "feed_error": False}
     source_url = _get_source_url(source["url"])
 
     try:
@@ -660,7 +660,7 @@ def ingest_source(source: dict, seen_images: set, dry_run: bool = False) -> dict
             # Create string representation of rejections if defaulting to Latest
             rejection_str = ",".join(rejection_reasons) if category == "Latest" and rejection_reasons else ""
 
-            execute(
+            res = insert_returning(
                 """
                 INSERT INTO articles (
                     id, title, summary, image_url, thumbnail_url, source_name, source_url, article_url,
@@ -668,19 +668,40 @@ def ingest_source(source: dict, seen_images: set, dry_run: bool = False) -> dict
                     ai_relevance_score, category_confidence_score, original_category, image_source_type
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'published', false, false, %s, %s, %s, %s)
                 ON CONFLICT DO NOTHING
+                RETURNING id
                 """,
                 (new_id, title, summary, resolved_image_url, thumb_url, source["name"], source_url,
                  article_url, category, pub_dt, relevance_score, conf_score, strict_cat, resolved_source_type),
             )
-            metrics["new_ids"].append(new_id)
-            if dry_run:
-                img_log = f"[Img: {resolved_source_type}]"
-                if category == "Latest" and rejection_str:
-                     logger.info(f"Added [Latest] (Rejected: {rejection_str}) {img_log} {source['name']}: {title[:40]}")
+            
+            if res:
+                metrics["new_ids"].append(new_id)
+                
+                if dry_run:
+                    img_log = f"[Img: {resolved_source_type}]"
+                    if category == "Latest" and rejection_str:
+                         logger.info(f"Added [Latest] (Rejected: {rejection_str}) {img_log} {source['name']}: {title[:40]}")
+                    else:
+                         logger.info(f"Added [{category}] {img_log} {source['name']}: {title[:55]}")
                 else:
-                     logger.info(f"Added [{category}] {img_log} {source['name']}: {title[:55]}")
-            else:
-                logger.info(f"Added [{category}] {source['name']}: {title[:55]}")
+                    logger.info(f"Added [{category}] {source['name']}: {title[:55]}")
+                    
+                    # --- AUTOMATIC PUSH JOB GENERATOR ---
+                    HIGH_SIGNAL_CATS = ["AI Models", "Product Launches", "Funding News", "Big Tech AI"]
+                    is_breaking_val = False # Static default on ingest
+                    should_notify = (category in HIGH_SIGNAL_CATS) or is_breaking_val
+                    
+                    logger.info(f"[PUSH-CHECK] Inserted Article ID: {new_id} | Title: {title[:30]}... | is_breaking: {is_breaking_val}")
+                    
+                    if should_notify:
+                        logger.info(f"[PUSH-CHECK] Decision: SEND | Reason: Category '{category}' qualifies")
+                        try:
+                            execute("INSERT INTO notification_jobs (article_id) VALUES (%s) ON CONFLICT DO NOTHING", (new_id,))
+                            metrics["jobs_created"] += 1
+                        except Exception as job_err:
+                            logger.error(f"[PUSH-CHECK] Error inserting job: {job_err}")
+                    else:
+                        logger.info(f"[PUSH-CHECK] Decision: SKIP | Reason: Category '{category}' is not high-signal")
 
     except Exception as e:
         logger.error(f"Error ingesting {source.get('name', 'unknown')}: {e}")
@@ -710,6 +731,8 @@ def run_ingestion(dry_run: bool = False) -> dict:
         "rejected_non_ai": 0,
         "skipped_as_tutorial": 0,
         "inserted_articles": 0,
+        "jobs_created": 0,
+        "run_pending_jobs_invoked": 0,
     }
     
     seen_image_session_cache = set()
@@ -722,6 +745,7 @@ def run_ingestion(dry_run: bool = False) -> dict:
             
         metrics["rejected_non_ai"] += source_metrics["rejected_non_ai"]
         metrics["skipped_as_tutorial"] += source_metrics["skipped_as_tutorial"]
+        metrics["jobs_created"] += source_metrics.get("jobs_created", 0)
         
         new_ids = source_metrics["new_ids"]
         if new_ids:
@@ -737,6 +761,17 @@ def run_ingestion(dry_run: bool = False) -> dict:
         })
 
     logger.info(f"Ingestion complete: {len(all_new_ids)} new articles from {len(sources)} sources")
+    
+    if metrics["jobs_created"] > 0 and not dry_run:
+        try:
+            logger.info(f"[PUSH-QUEUE] {metrics['jobs_created']} jobs created. Triggering run_pending_jobs...")
+            from notification_worker import run_pending_jobs
+            worker_result = run_pending_jobs(limit=50)
+            metrics["run_pending_jobs_invoked"] += 1
+            logger.info(f"[PUSH-QUEUE] Worker execution complete: {worker_result}")
+        except Exception as e:
+            logger.error(f"[PUSH-QUEUE] Failed to run worker: {e}")
+
     return {
         "status": "done",
         "total": len(all_new_ids),

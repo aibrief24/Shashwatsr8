@@ -551,39 +551,7 @@ def _run_ingestion_background():
         new_ids = result.get("new_article_ids", [])
         logger.info(f"[INGEST] new_article_ids count: {len(new_ids)}")
 
-        if new_ids:
-            logger.info("[INGEST] before notification job insert")
-            try:
-                from database import _pool as pool_ref
-                conn = pool_ref.getconn()
-                try:
-                    with conn.cursor() as cur:
-                        for aid in new_ids:
-                            cur.execute("""
-                                INSERT INTO notification_jobs (article_id)
-                                VALUES (%s::uuid)
-                                ON CONFLICT (article_id) DO NOTHING
-                            """, (str(aid),))
-                            if cur.rowcount:
-                                jobs_created += 1
-                        conn.commit()
-                finally:
-                    pool_ref.putconn(conn)
-            except Exception as e:
-                logger.warning(f"[INGEST] job creation error: {e}")
-            logger.info(f"[INGEST] after notification job insert: {jobs_created} jobs created")
-
-            # AUTOMATICALLY TRIGGER PUSH QUEUE
-            if jobs_created > 0:
-                logger.info("[INGEST] Automatically starting notification worker for new jobs")
-                try:
-                    from notification_worker import run_pending_jobs
-                    worker_result = run_pending_jobs(limit=50)
-                    logger.info(f"[INGEST] Auto-worker result: {worker_result}")
-                except Exception as e:
-                    logger.error(f"[INGEST] Auto-worker error: {e}")
-
-        logger.info(f"[INGEST] background task done — articles={result.get('total',0)}, jobs={jobs_created}")
+        logger.info(f"[INGEST] background task done — articles={result.get('total',0)}")
     except Exception as e:
         logger.error(f"[INGEST] background task error: {e}")
 
