@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Linking, Image as RNImage } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Colors, FontSize, Radius } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Lock, ArrowLeft, CheckCircle } from 'lucide-react-native';
@@ -13,15 +13,46 @@ export default function ResetPasswordScreen() {
     const [success, setSuccess] = useState(false);
 
     const router = useRouter();
-    // Supabase hashes the access_token into the URL in the format:
-    // aibrief24://reset-password#access_token=...&refresh_token=...&type=recovery
-    // expo-router useLocalSearchParams automatically parses fragments and query params into properties.
-    const { access_token } = useLocalSearchParams();
+    const [accessToken, setAccessToken] = useState<string | null>(null);
+
+    const parseDeepLink = (url: string | null) => {
+        if (!url) return;
+        console.log(`[RESET-PASSWORD] initial url: ${url}`);
+
+        try {
+            const hashPart = url.split('#')[1] || url.split('?')[1];
+            if (!hashPart) {
+                console.log(`[RESET-PASSWORD] parsed hash keys: none`);
+                console.log(`[RESET-PASSWORD] access token present true/false: false`);
+                return;
+            }
+
+            const params = new URLSearchParams(hashPart);
+            const r_access_token = params.get('access_token');
+            const r_type = params.get('type');
+
+            console.log(`[RESET-PASSWORD] parsed hash keys: ${Array.from(params.keys()).join(', ')}`);
+            console.log(`[RESET-PASSWORD] access token present true/false: ${!!r_access_token}`);
+            console.log(`[RESET-PASSWORD] recovery type: ${r_type}`);
+
+            if (r_access_token && r_type === 'recovery') {
+                setAccessToken(r_access_token);
+            }
+        } catch (e) {
+            console.log(`[RESET-PASSWORD] parse error: ${e}`);
+        }
+    };
+
+    useEffect(() => {
+        Linking.getInitialURL().then((url) => parseDeepLink(url));
+        const sub = Linking.addEventListener('url', ({ url }) => parseDeepLink(url));
+        return () => sub.remove();
+    }, []);
 
     const handleUpdate = async () => {
         if (!password.trim()) { setError('Please enter a new password'); return; }
         if (password.length < 6) { setError('Password must be at least 6 characters'); return; }
-        if (!access_token || typeof access_token !== 'string') {
+        if (!accessToken) {
             setError('Invalid or expired reset link. Please try requesting a new one.');
             return;
         }
@@ -29,9 +60,11 @@ export default function ResetPasswordScreen() {
         setError('');
         setLoading(true);
         try {
-            await api.updatePassword(access_token, password);
+            const res = await api.updatePassword(accessToken, password);
+            console.log(`[RESET-PASSWORD] update password response: `, res);
             setSuccess(true);
         } catch (e: any) {
+            console.log(`[RESET-PASSWORD] update password error: `, e);
             setError(e.message || 'Failed to update password. Link may be expired.');
         } finally {
             setLoading(false);
@@ -69,8 +102,11 @@ export default function ResetPasswordScreen() {
 
                         <View style={styles.header}>
                             <View style={styles.logoBadge}>
-                                <LinearGradient colors={[Colors.primary, Colors.secondary]} style={StyleSheet.absoluteFillObject} />
-                                <Text style={styles.logoText}>AI</Text>
+                                <RNImage
+                                    source={require('@/assets/images/icon.png')}
+                                    style={styles.logoImage}
+                                    resizeMode="contain"
+                                />
                             </View>
                             <Text style={styles.title}>Create New Password</Text>
                             <Text style={styles.subtitle}>Enter a strong new password for your account.</Text>
@@ -120,7 +156,7 @@ const styles = StyleSheet.create({
     backText: { fontSize: 16, color: Colors.textSecondary, fontWeight: '500' },
     header: { alignItems: 'center', marginBottom: 40 },
     logoBadge: { width: 72, height: 72, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginBottom: 24, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10, overflow: 'hidden' },
-    logoText: { fontSize: 26, fontWeight: '900', color: '#fff', letterSpacing: 1 },
+    logoImage: { width: '100%', height: '100%' },
     title: { fontSize: 28, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5, marginBottom: 8 },
     subtitle: { fontSize: 15, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
     errorBox: { backgroundColor: Colors.error + '20', borderRadius: Radius.md, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: Colors.error + '50' },
