@@ -14,7 +14,9 @@ import {
   Animated,
   ActivityIndicator,
   ScrollView,
+  AppState,
 } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { requestAndRegisterPushToken } from '@/utils/notifications';
 import { Image } from 'expo-image';
@@ -483,6 +485,8 @@ export default function HomeFeed() {
   const [offset, setOffset] = useState(0);
   const [showPushCta, setShowPushCta] = useState(false);
   const [registeringPush, setRegisteringPush] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const lastRefreshTime = useRef<number>(Date.now());
   const { token } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -493,31 +497,52 @@ export default function HomeFeed() {
   const TAB_BAR_OFFSET = Platform.OS === 'ios' ? 100 : 90;
   const CARD_HEIGHT = height - HEADER_HEIGHT;
 
-  const loadArticles = async () => {
+  const refreshArticles = async (silent = false, isPullRefresh = false) => {
+    // If it's a silent check from AppState or Focus, we don't trigger the UI spinners unless list is completely empty
+    if (!silent && !isPullRefresh && articles.length === 0) setLoading(true);
+    if (isPullRefresh) setRefreshing(true);
+
     try {
       const res = await api.getArticles(undefined, 20, 0);
-      const loaded = res.articles || [];
+      const fetched = res.articles || [];
 
-      const uniqueLoaded = loaded.filter(
-        (v: Article, i: number, a: Article[]) =>
-          a.findIndex(t => t.id === v.id) === i
-      );
+      setArticles(prev => {
+        // Base case: app is empty, so we seed it natively
+        if (prev.length === 0) {
+          const uniqueFetched = fetched.filter(
+            (v: Article, i: number, a: Article[]) => a.findIndex(t => t.id === v.id) === i
+          );
+          setOffset(uniqueFetched.length);
+          setHasMore(uniqueFetched.length === 20);
+          console.log(`[FEED-REFRESH] initial load count: ${uniqueFetched.length}`);
+          return uniqueFetched;
+        }
 
-      const validImages = uniqueLoaded
-        .map((a: Article) => a.image_url)
-        .filter(Boolean);
+        // Active app case: we check for entirely new articles not currently tracked
+        const existingIds = new Set(prev.map(a => a.id));
+        const trulyNew = fetched.filter((a: Article) => !existingIds.has(a.id));
 
-      if (validImages.length > 0) {
-        Image.prefetch(validImages).catch(() => { });
-      }
+        if (trulyNew.length > 0) {
+          console.log(`[FEED-REFRESH] new articles found count: ${trulyNew.length}`);
+          const combined = [...trulyNew, ...prev];
 
-      setArticles(uniqueLoaded);
-      setOffset(20);
-      setHasMore(uniqueLoaded.length === 20);
+          const validImages = trulyNew.map((a: Article) => a.image_url).filter(Boolean);
+          if (validImages.length > 0) Image.prefetch(validImages).catch(() => { });
+
+          // CRITICAL: shift the loadMore pagination offset window by precisely the length we injected at the top
+          setOffset(currentOffset => currentOffset + trulyNew.length);
+          return combined;
+        } else {
+          console.log('[FEED-REFRESH] no new articles');
+          return prev;
+        }
+      });
+      lastRefreshTime.current = Date.now();
     } catch (e) {
-      console.log('Failed to load articles:', e);
+      console.log('Failed to refresh articles:', e);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -551,11 +576,41 @@ export default function HomeFeed() {
   };
 
   useEffect(() => {
-    loadArticles();
+    refreshArticles(false, false);
     AsyncStorage.getItem('push_prompt_dismissed_v2').then((val: string | null) => {
       if (val !== 'true') setShowPushCta(true);
     });
     console.log('[DEBUG-PUSH] home fully mounted');
+
+    // Automatically check for new content when pulling the app back from the background
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        const now = Date.now();
+        if (now - lastRefreshTime.current > 3 * 60 * 1000) { // 3 min cache timeout natively integrated
+          console.log('[FEED-REFRESH] app returned active');
+          refreshArticles(true, false);
+        }
+      }
+    });
+
+    return () => sub.remove();
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Whenever users switch tabs explicitly and organically return
+      const now = Date.now();
+      if (now - lastRefreshTime.current > 3 * 60 * 1000) {
+        console.log('[FEED-REFRESH] focus refresh');
+        refreshArticles(true, false);
+      }
+    }, [])
+  );
+
+  const onPullRefresh = useCallback(() => {
+    console.log('[FEED-REFRESH] pull refresh');
+    // Manual intervention bypasses cache entirely natively
+    refreshArticles(false, true);
   }, []);
 
   const handleEnablePush = async () => {
@@ -738,6 +793,8 @@ export default function HomeFeed() {
               data={articles}
               renderItem={renderCard}
               keyExtractor={(item) => item.id}
+              refreshing={refreshing}
+              onRefresh={onPullRefresh}
               pagingEnabled
               showsVerticalScrollIndicator={false}
               snapToInterval={CARD_HEIGHT}
