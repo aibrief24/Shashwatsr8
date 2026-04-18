@@ -18,6 +18,27 @@ function GlobalAuthObserver() {
   const segments = useSegments();
   const router = useRouter();
 
+  const lastNotificationResponse = Notifications.useLastNotificationResponse();
+  const processedNotificationId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (loading || !token || !hasOnboarded) return;
+
+    if (
+      lastNotificationResponse &&
+      lastNotificationResponse.notification.request.content.data.articleId &&
+      lastNotificationResponse.actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER
+    ) {
+      const notifId = lastNotificationResponse.notification.request.identifier;
+      if (processedNotificationId.current !== notifId) {
+        processedNotificationId.current = notifId;
+        const articleId = lastNotificationResponse.notification.request.content.data.articleId;
+        console.log(`[PUSH-NAV] Tapped notification for article: ${articleId}`);
+        router.push(`/article/${articleId}` as any);
+      }
+    }
+  }, [lastNotificationResponse, loading, token, hasOnboarded, router]);
+
   useEffect(() => {
     if (loading) return;
 

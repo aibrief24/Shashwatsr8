@@ -548,7 +548,7 @@ def ingest_source(source: dict, seen_images: set, dry_run: bool = False) -> dict
     """Ingest articles from a single RSS source.
     Returns metrics dict.
     """
-    metrics = {"new_ids": [], "errors": 0, "rejected_non_ai": 0, "skipped_as_tutorial": 0, "jobs_created": 0, "feed_error": False}
+    metrics = {"new_ids": [], "qualified_jobs": [], "errors": 0, "rejected_non_ai": 0, "skipped_as_tutorial": 0, "feed_error": False}
     source_url = _get_source_url(source["url"])
 
     try:
@@ -686,22 +686,21 @@ def ingest_source(source: dict, seen_images: set, dry_run: bool = False) -> dict
                 else:
                     logger.info(f"Added [{category}] {source['name']}: {title[:55]}")
                     
-                    # --- AUTOMATIC PUSH JOB GENERATOR ---
-                    HIGH_SIGNAL_CATS = ["AI Models", "Product Launches", "Funding News", "Big Tech AI"]
+                    # --- AUTOMATIC PUSH JOB EVALUATION ---
+                    HIGH_SIGNAL_CATS = ["Big Tech AI", "AI Models", "Product Launches", "Funding News"]
                     is_breaking_val = False # Static default on ingest
                     should_notify = (category in HIGH_SIGNAL_CATS) or is_breaking_val
                     
-                    logger.info(f"[PUSH-CHECK] Inserted Article ID: {new_id} | Title: {title[:30]}... | is_breaking: {is_breaking_val}")
-                    
                     if should_notify:
-                        logger.info(f"[PUSH-CHECK] Decision: SEND | Reason: Category '{category}' qualifies")
-                        try:
-                            execute("INSERT INTO notification_jobs (article_id) VALUES (%s) ON CONFLICT DO NOTHING", (new_id,))
-                            metrics["jobs_created"] += 1
-                        except Exception as job_err:
-                            logger.error(f"[PUSH-CHECK] Error inserting job: {job_err}")
+                        # Append to qualified list instead of executing immediately
+                        metrics["qualified_jobs"].append({
+                            "id": new_id,
+                            "category": category,
+                            "is_breaking": is_breaking_val,
+                            "relevance": relevance_score
+                        })
                     else:
-                        logger.info(f"[PUSH-CHECK] Decision: SKIP | Reason: Category '{category}' is not high-signal")
+                        logger.debug(f"[PUSH-CHECK] Decision: SKIP | Reason: Category '{category}' not top-tier")
 
     except Exception as e:
         logger.error(f"Error ingesting {source.get('name', 'unknown')}: {e}")
@@ -737,6 +736,8 @@ def run_ingestion(dry_run: bool = False) -> dict:
     
     seen_image_session_cache = set()
     
+    all_qualified_jobs = []
+    
     for source in sources:
         source_metrics = ingest_source(source, seen_image_session_cache, dry_run=dry_run)
         
@@ -745,7 +746,8 @@ def run_ingestion(dry_run: bool = False) -> dict:
             
         metrics["rejected_non_ai"] += source_metrics["rejected_non_ai"]
         metrics["skipped_as_tutorial"] += source_metrics["skipped_as_tutorial"]
-        metrics["jobs_created"] += source_metrics.get("jobs_created", 0)
+        
+        all_qualified_jobs.extend(source_metrics.get("qualified_jobs", []))
         
         new_ids = source_metrics["new_ids"]
         if new_ids:
@@ -761,6 +763,44 @@ def run_ingestion(dry_run: bool = False) -> dict:
         })
 
     logger.info(f"Ingestion complete: {len(all_new_ids)} new articles from {len(sources)} sources")
+    
+    if all_qualified_jobs and not dry_run:
+        logger.info(f"[PUSH-SCHEDULER] Sorting {len(all_qualified_jobs)} qualified jobs for rate limit spacing.")
+        
+        # Priority map: lower index = higher priority
+        priority_map = {
+            "Big Tech AI": 1,
+            "AI Models": 2,
+            "Product Launches": 3,
+            "Funding News": 4
+        }
+        
+        # Sort jobs: breaking first, then highest category priority, then relevance score
+        sorted_jobs = sorted(
+            all_qualified_jobs,
+            key=lambda j: (
+                0 if j["is_breaking"] else 1,
+                priority_map.get(j["category"], 99),
+                -j["relevance"]
+            )
+        )
+        
+        for idx, job in enumerate(sorted_jobs):
+            # Rank 0 is exactly now. Ensuing ranks step by +45 minutes
+            interval_mins = idx * 45
+            
+            job_id = job["id"]
+            cat = job["category"]
+            
+            try:
+                execute(
+                    f"INSERT INTO notification_jobs (article_id, scheduled_at) VALUES (%s, NOW() + INTERVAL '{interval_mins} minutes') ON CONFLICT DO NOTHING",
+                    (job_id,)
+                )
+                logger.info(f"[PUSH-SCHEDULER] Job {job_id} ({cat}) -> Scheduled +{interval_mins}m")
+                metrics["jobs_created"] += 1
+            except Exception as e:
+                logger.error(f"[PUSH-SCHEDULER] Error inserting Job {job_id}: {e}")
     
     if metrics["jobs_created"] > 0 and not dry_run:
         try:

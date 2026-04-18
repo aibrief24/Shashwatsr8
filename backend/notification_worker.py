@@ -106,6 +106,35 @@ def run_pending_jobs(limit: int = 50, admin_key: str = "") -> dict:
     """
     conn = _db_conn()
     try:
+        # ── 0. Native Rate Limits & Spacing ───────────────────────────────────
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    COUNT(*) FILTER (WHERE processed_at >= NOW() - INTERVAL '24 HOURS' AND status = 'sent') as daily_sent,
+                    MAX(processed_at) FILTER (WHERE status = 'sent') as last_sent_time
+                FROM notification_jobs
+            """)
+            row = cur.fetchone()
+            daily_sent = row[0] or 0
+            last_sent_time = row[1]
+            
+            # 1. Enforce Daily Limit (4)
+            if daily_sent >= 4:
+                logger.info(f"[PUSH-WORKER] Throttled. Daily cap of 4 reached ({daily_sent} sent today).")
+                # Immediately map all presently queued jobs to 'skipped'
+                cur.execute("UPDATE notification_jobs SET status='skipped', error='daily limit reached', updated_at=NOW() WHERE status='pending' AND scheduled_at <= NOW()")
+                conn.commit()
+                return {"processed": 0, "sent": 0, "failed": 0, "no_tokens": 0, "throttled": "daily_limit_exceeded"}
+
+            # 2. Enforce 30-min Global Buffer
+            if last_sent_time:
+                cur.execute("SELECT EXTRACT(EPOCH FROM (NOW() - %s))", (last_sent_time,))
+                diff_row = cur.fetchone()
+                secs_since_last = diff_row[0] if diff_row else 0
+                if secs_since_last is not None and secs_since_last < 1800:
+                    logger.info(f"[PUSH-WORKER] Throttled. Last push was {secs_since_last/60:.1f}m ago (needs 30m).")
+                    return {"processed": 0, "sent": 0, "failed": 0, "no_tokens": 0, "throttled": "30m_spacing_required"}
+
         # ── 1. CLAIM jobs atomically ──────────────────────────────────────────
         with conn.cursor() as cur:
             cur.execute("""
@@ -117,6 +146,7 @@ def run_pending_jobs(limit: int = 50, admin_key: str = "") -> dict:
                     SELECT id FROM notification_jobs
                     WHERE status = 'pending'
                       AND attempt_count < max_attempts
+                      AND scheduled_at <= NOW()
                     ORDER BY scheduled_at
                     LIMIT %s
                     FOR UPDATE SKIP LOCKED
@@ -202,8 +232,7 @@ def _process_job(conn, job_id: str, article_id: str, tokens: list[str]):
 
     title     = "AIBrief24"
     body      = (article["title"] or "")[:120]
-    data      = {"type": "new_article", "article_id": article_id,
-                 "deep_link": f"aibrief24://article/{article_id}"}
+    data      = {"type": "article", "articleId": article_id}
 
     # ── d. Batch send ─────────────────────────────────────────────────────────
     send_results = _batch_send(tokens, title, body, data)

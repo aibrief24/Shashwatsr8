@@ -49,7 +49,7 @@ def main():
             valid_tokens,
             title_text,
             body_text,
-            data={"article_id": article_id}
+            data={"articleId": article_id, "type": "article"}
         )
         print(f"Expo Ticket Response: {json.dumps(result, indent=2)}")
     except Exception as e:
