@@ -4,7 +4,7 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
 import { api } from '@/services/api';
 
-export async function requestAndRegisterPushToken(authToken: string): Promise<boolean> {
+export async function requestAndRegisterPushToken(authToken: string, logPrefix = '[PUSH-FLOW]'): Promise<boolean> {
     let token;
 
     if (Platform.OS === 'android') {
@@ -17,7 +17,7 @@ export async function requestAndRegisterPushToken(authToken: string): Promise<bo
     }
 
     if (Device.isDevice) {
-        console.log('[PUSH-FLOW] permission request start');
+        console.log(`${logPrefix} permission request start`);
         const { status: existingStatus } = await Notifications.getPermissionsAsync();
         let finalStatus = existingStatus;
 
@@ -25,46 +25,46 @@ export async function requestAndRegisterPushToken(authToken: string): Promise<bo
             const { status } = await Notifications.requestPermissionsAsync();
             finalStatus = status;
         }
-        console.log(`[PUSH-FLOW] permission result: ${finalStatus}`);
+        console.log(`${logPrefix} permission result: ${finalStatus}`);
 
         if (finalStatus !== 'granted') {
-            console.log('[PUSH-FLOW] Failed to get push token for push notification! App will continue normally.');
+            console.log(`${logPrefix} Failed to get push token for push notification! App will continue normally.`);
             return false;
         }
 
         const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId ?? "e4aa3746-6261-41f1-bb3d-b0a87b6f0f6e";
-        console.log(`[PUSH-FLOW] projectId used for getExpoPushTokenAsync: ${projectId}`);
+        console.log(`${logPrefix} projectId used for getExpoPushTokenAsync: ${projectId}`);
 
         if (!projectId || projectId === "placeholder-project-id") {
-            console.log('[PUSH-FLOW] No valid projectId found in app.json. Cannot generate push token.');
+            console.log(`${logPrefix} No valid projectId found in app.json. Cannot generate push token.`);
             return false;
         }
 
         if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient && Platform.OS === 'android') {
-            console.log('[PUSH-FLOW] Android Push notification tokens are not supported in Expo Go. Please use a development build.');
+            console.log(`${logPrefix} Android Push notification tokens are not supported in Expo Go. Please use a development build.`);
             return false;
         }
 
         try {
-            console.log('[PUSH-FLOW] token generation start');
+            console.log(`${logPrefix} token generation start`);
             const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
             token = tokenResponse.data;
-            console.log('[PUSH-FLOW] token generation end');
-            console.log('[PUSH-FLOW] expo token value:', token);
+            console.log(`${logPrefix} token generated`);
+            console.log(`${logPrefix} expo token value:`, token);
 
             if (token) {
-                console.log('[PUSH-FLOW] backend /push/register start');
+                console.log(`${logPrefix} backend /push/register start`);
                 await api.registerPushToken(token, Platform.OS, authToken);
-                console.log('[PUSH-FLOW] backend response result: success');
-                console.log('[PUSH-FLOW] backend /push/register end');
+                console.log(`${logPrefix} backend response result: success`);
+                console.log(`${logPrefix} backend /push/register end`);
                 return true;
             }
         } catch (e) {
-            console.log('[PUSH-FLOW] error thrown during token generation or registration:', e);
+            console.log(`${logPrefix} error thrown during token generation or registration:`, e);
             return false;
         }
     } else {
-        console.log('[PUSH-FLOW] Must use physical device for Push Notifications. (Not an emulator/simulator)');
+        console.log(`${logPrefix} Must use physical device for Push Notifications. (Not an emulator/simulator)`);
         return false;
     }
 

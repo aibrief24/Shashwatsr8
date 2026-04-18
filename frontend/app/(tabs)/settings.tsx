@@ -5,16 +5,48 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { Colors, FontSize, Radius, Spacing, TELEGRAM_URL, WEBSITE_URL } from '@/constants/theme';
 import { Bell, Send, Globe, Share2, Shield, Info, LogOut, ChevronRight, ExternalLink } from 'lucide-react-native';
+import { requestAndRegisterPushToken } from '@/utils/notifications';
 
 export default function SettingsScreen() {
   const [notifEnabled, setNotifEnabled] = useState(true);
-  const { user, logout } = useAuth();
+  const [isRegistering, setIsRegistering] = useState(false);
+  const { user, token, logout } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
   const handleLogout = () => {
     logout();
     router.replace('/login');
+  };
+
+  const handleToggleNotifications = async (val: boolean) => {
+    console.log('[SETTINGS-PUSH] toggle pressed', val);
+    setNotifEnabled(val);
+
+    if (val) {
+      if (!token) return;
+      setIsRegistering(true);
+      console.log('[SETTINGS-PUSH] register start');
+      try {
+        const success = await requestAndRegisterPushToken(token, '[SETTINGS-PUSH]');
+        console.log(`[SETTINGS-PUSH] register ${success ? 'success' : 'failure'}`);
+
+        if (success) {
+          Alert.alert('Success', 'Notifications enabled');
+        } else {
+          Alert.alert('Error', 'Failed to enable notifications');
+          setNotifEnabled(false);
+        }
+      } catch (e) {
+        console.log('[SETTINGS-PUSH] register error', e);
+        Alert.alert('Error', 'Failed to enable notifications');
+        setNotifEnabled(false);
+      } finally {
+        setIsRegistering(false);
+      }
+    } else {
+      console.log('[SETTINGS-PUSH] notifications disabled locally');
+    }
   };
 
   const handleShareApp = () => {
@@ -57,7 +89,7 @@ export default function SettingsScreen() {
           icon={Bell}
           label="Push Notifications"
           color={Colors.primary}
-          rightElement={<Switch value={notifEnabled} onValueChange={setNotifEnabled} trackColor={{ false: Colors.surfaceHighlight, true: Colors.primary + '60' }} thumbColor={notifEnabled ? Colors.primary : Colors.textTertiary} />}
+          rightElement={<Switch disabled={isRegistering} value={notifEnabled} onValueChange={handleToggleNotifications} trackColor={{ false: Colors.surfaceHighlight, true: Colors.primary + '60' }} thumbColor={notifEnabled ? Colors.primary : Colors.textTertiary} />}
         />
       </View>
 
