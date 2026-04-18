@@ -551,7 +551,6 @@ def _run_ingestion_background():
         new_ids = result.get("new_article_ids", [])
         logger.info(f"[INGEST] new_article_ids count: {len(new_ids)}")
 
-        jobs_created = 0
         if new_ids:
             logger.info("[INGEST] before notification job insert")
             try:
@@ -573,6 +572,16 @@ def _run_ingestion_background():
             except Exception as e:
                 logger.warning(f"[INGEST] job creation error: {e}")
             logger.info(f"[INGEST] after notification job insert: {jobs_created} jobs created")
+
+            # AUTOMATICALLY TRIGGER PUSH QUEUE
+            if jobs_created > 0:
+                logger.info("[INGEST] Automatically starting notification worker for new jobs")
+                try:
+                    from notification_worker import run_pending_jobs
+                    worker_result = run_pending_jobs(limit=50)
+                    logger.info(f"[INGEST] Auto-worker result: {worker_result}")
+                except Exception as e:
+                    logger.error(f"[INGEST] Auto-worker error: {e}")
 
         logger.info(f"[INGEST] background task done — articles={result.get('total',0)}, jobs={jobs_created}")
     except Exception as e:
