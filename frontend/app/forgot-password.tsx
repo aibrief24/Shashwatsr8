@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Image as RNImage } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { Colors, FontSize, Radius } from '@/constants/theme';
@@ -11,6 +11,7 @@ export default function ForgotPasswordScreen() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [rateLimited, setRateLimited] = useState(false);
   const { forgotPassword } = useAuth();
   const router = useRouter();
 
@@ -18,15 +19,33 @@ export default function ForgotPasswordScreen() {
     if (!email.trim()) { setError('Please enter your email'); return; }
     setError('');
     setLoading(true);
+
     try {
       await forgotPassword(email.trim().toLowerCase());
       setSent(true);
+      setRateLimited(true);
     } catch (e: any) {
-      setError(e.message || 'Failed to send reset email. Please try again.');
+      const msg = e.message?.toLowerCase() || '';
+      if (msg.includes('rate limit') || msg.includes('too many') || msg.includes('limit exceeded')) {
+        setError('Too many reset attempts. Please wait 30–60 minutes and try again.');
+        setRateLimited(true);
+      } else {
+        setError(e.message || 'Failed to send reset email. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    if (rateLimited) {
+      timer = setTimeout(() => {
+        setRateLimited(false);
+      }, 60000); // 60 seconds disable
+    }
+    return () => clearTimeout(timer);
+  }, [rateLimited]);
 
   if (sent) {
     return (
@@ -63,8 +82,11 @@ export default function ForgotPasswordScreen() {
 
             <View style={styles.header}>
               <View style={styles.logoBadge}>
-                <LinearGradient colors={[Colors.primary, Colors.secondary]} style={StyleSheet.absoluteFillObject} />
-                <Text style={styles.logoText}>AI</Text>
+                <RNImage
+                  source={require('@/assets/images/icon.png')}
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                />
               </View>
               <Text style={styles.title}>Reset Password</Text>
               <Text style={styles.subtitle}>Enter your email and we'll send you a secure reset link</Text>
@@ -89,14 +111,14 @@ export default function ForgotPasswordScreen() {
               </View>
             </View>
 
-            <TouchableOpacity testID="send-reset-btn" onPress={handleReset} disabled={loading} activeOpacity={0.8} style={styles.btnShadowWrap}>
+            <TouchableOpacity testID="send-reset-btn" onPress={handleReset} disabled={loading || rateLimited} activeOpacity={0.8} style={styles.btnShadowWrap}>
               <LinearGradient
                 colors={[Colors.primary, Colors.secondary]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
-                style={[styles.btn, loading && styles.btnDisabled]}
+                style={[styles.btn, (loading || rateLimited) && styles.btnDisabled]}
               >
-                <Text style={styles.btnText}>{loading ? 'Sending...' : 'Send Reset Link'}</Text>
+                <Text style={styles.btnText}>{(loading || rateLimited) ? 'Wait 60s to resend...' : 'Send Reset Link'}</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -114,7 +136,7 @@ const styles = StyleSheet.create({
   backText: { fontSize: 16, color: Colors.textSecondary, fontWeight: '500' },
   header: { alignItems: 'center', marginBottom: 40 },
   logoBadge: { width: 72, height: 72, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginBottom: 24, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10, overflow: 'hidden' },
-  logoText: { fontSize: 26, fontWeight: '900', color: '#fff', letterSpacing: 1 },
+  logoImage: { width: '100%', height: '100%' },
   title: { fontSize: 28, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5, marginBottom: 8 },
   subtitle: { fontSize: 15, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
   errorBox: { backgroundColor: Colors.error + '20', borderRadius: Radius.md, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: Colors.error + '50' },
