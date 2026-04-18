@@ -303,6 +303,16 @@ def reset_password(req: ResetPasswordRequest):
     return supabase_reset_password(req.email)
 
 
+class UpdatePasswordRequest(BaseModel):
+    access_token: str
+    new_password: str
+
+@api_router.post("/auth/update-password")
+def update_password(req: UpdatePasswordRequest):
+    from auth import supabase_update_password
+    return supabase_update_password(req.access_token, req.new_password)
+
+
 @api_router.post("/auth/logout")
 def logout(request: Request):
     auth_header = request.headers.get("Authorization", "")

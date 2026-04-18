@@ -51,11 +51,12 @@ function GlobalAuthObserver() {
     }
 
     if (!token) {
-      if (segments[0] !== 'login' && segments[0] !== 'signup' && segments[0] !== 'forgot-password') {
+      const currentSegment = segments[0] as string;
+      if (currentSegment !== 'login' && currentSegment !== 'signup' && currentSegment !== 'forgot-password' && currentSegment !== 'reset-password') {
         router.replace('/login');
       }
     } else {
-      const allowedAuthRoutes = ['(tabs)', 'article', 'search', 'privacy'];
+      const allowedAuthRoutes = ['(tabs)', 'article', 'search', 'privacy', 'reset-password'];
       if (!allowedAuthRoutes.includes(segments[0] as string)) {
         console.log(`[Auth Observer] executing unified navigate to /tabs from segment: ${segments[0]}`);
         router.replace('/(tabs)');

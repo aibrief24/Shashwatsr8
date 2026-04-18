@@ -73,7 +73,7 @@ def supabase_refresh_token(refresh_token: str):
 
 def supabase_reset_password(email: str):
     res = _http.post(
-        f"{AUTH_URL}/recover",
+        f"{AUTH_URL}/recover?redirect_to=aibrief24://reset-password",
         json={"email": email},
         headers=HEADERS,
     )
@@ -82,6 +82,19 @@ def supabase_reset_password(email: str):
         msg = data.get("msg") or data.get("message") or "Failed to send reset email"
         raise HTTPException(res.status_code, msg)
     return {"success": True, "message": "Password reset email sent"}
+
+
+def supabase_update_password(access_token: str, new_password: str):
+    res = _http.put(
+        f"{AUTH_URL}/user",
+        json={"password": new_password},
+        headers={**HEADERS, "Authorization": f"Bearer {access_token}"},
+    )
+    if res.status_code >= 400:
+        data = res.json()
+        msg = data.get("msg") or data.get("message") or "Failed to update password"
+        raise HTTPException(res.status_code, msg)
+    return {"success": True, "message": "Password updated successfully"}
 
 
 def supabase_logout(access_token: str):
