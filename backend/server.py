@@ -309,6 +309,7 @@ class UpdatePasswordRequest(BaseModel):
 
 @api_router.post("/auth/update-password")
 def update_password(req: UpdatePasswordRequest):
+    logger.info(f"[/auth/update-password] Request received. Token present: {bool(req.access_token)}")
     from auth import supabase_update_password
     return supabase_update_password(req.access_token, req.new_password)
 
@@ -318,6 +319,7 @@ class ExchangeCodeRequest(BaseModel):
 
 @api_router.post("/auth/exchange-code")
 def exchange_code(req: ExchangeCodeRequest):
+    logger.info(f"[/auth/exchange-code] Request received. Code present: {bool(req.code)}")
     from auth import supabase_exchange_code
     return supabase_exchange_code(req.code)
 

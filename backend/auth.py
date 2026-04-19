@@ -90,6 +90,8 @@ def supabase_update_password(access_token: str, new_password: str):
         json={"password": new_password},
         headers={**HEADERS, "Authorization": f"Bearer {access_token}"},
     )
+    logger.info(f"[/auth/update-password] Supabase update user response status: {res.status_code}")
+    logger.info(f"[/auth/update-password] Supabase update user response body: {res.text}")
     if res.status_code >= 400:
         data = res.json()
         msg = data.get("msg") or data.get("message") or "Failed to update password"
@@ -104,6 +106,8 @@ def supabase_exchange_code(code: str):
         json={"auth_code": code, "code_verifier": ""},
         headers=HEADERS,
     )
+    logger.info(f"[/auth/exchange-code] Supabase response status: {res.status_code}")
+    logger.info(f"[/auth/exchange-code] Supabase response body: {res.text}")
     if res.status_code >= 400:
         data = res.json()
         msg = data.get("error_description") or data.get("msg") or "Failed to exchange recovery code"

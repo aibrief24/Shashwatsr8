@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
@@ -61,7 +61,7 @@ export default function PrivacyPolicyScreen() {
 
                 <Text style={styles.sectionTitle}>9. Contact Information</Text>
                 <Text style={styles.paragraph}>
-                    If you have any questions or concerns regarding this Privacy Policy or your data, please contact us at support@aibrief24.com.
+                    For support or privacy-related questions, contact us at <Text onPress={() => Linking.openURL('mailto:aibrief2526@gmail.com')} style={{ color: Colors.primary }}>aibrief2526@gmail.com</Text>
                 </Text>
             </ScrollView>
         </View>
