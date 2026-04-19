@@ -15,6 +15,7 @@ export default function ResetPasswordScreen() {
     const router = useRouter();
     const [accessToken, setAccessToken] = useState<string | null>(null);
     const [code, setCode] = useState<string | null>(null);
+    const [devWarning, setDevWarning] = useState(false);
 
     const matchParam = (url: string, param: string) => {
         const regex = new RegExp(`[#?&]${param}=([^&]+)`);
@@ -24,6 +25,10 @@ export default function ResetPasswordScreen() {
 
     const parseDeepLink = (url: string | null) => {
         if (!url) return;
+
+        if (url.includes('expo-development-client')) {
+            setDevWarning(true);
+        }
 
         try {
             const queryPart = url.split('?')[1] || '';
@@ -147,7 +152,13 @@ export default function ResetPasswordScreen() {
                             <Text style={styles.subtitle}>Enter a strong new password for your account.</Text>
                         </View>
 
-                        {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
+                        {devWarning ? (
+                            <View style={styles.warningBox}>
+                                <Text style={styles.warningText}>Password reset links cannot be tested correctly in Expo Dev Client. Please use a preview/standalone build.</Text>
+                            </View>
+                        ) : null}
+
+                        {error && !devWarning ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
 
                         <View style={styles.inputGroup}>
                             <View style={styles.inputRow}>
@@ -196,6 +207,8 @@ const styles = StyleSheet.create({
     subtitle: { fontSize: 15, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22 },
     errorBox: { backgroundColor: Colors.error + '20', borderRadius: Radius.md, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: Colors.error + '50' },
     errorText: { color: Colors.error, fontSize: FontSize.sm, textAlign: 'center', fontWeight: '500' },
+    warningBox: { backgroundColor: Colors.accent + '20', borderRadius: Radius.md, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: Colors.accent + '50' },
+    warningText: { color: Colors.accent, fontSize: FontSize.sm, textAlign: 'center', fontWeight: '500', lineHeight: 20 },
     inputGroup: { marginBottom: 32 },
     inputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surface, borderRadius: 16, paddingHorizontal: 20, height: 60, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
     input: { flex: 1, color: Colors.textPrimary, fontSize: 16, marginLeft: 16 },
