@@ -689,9 +689,17 @@ def ingest_source(source: dict, seen_images: set, dry_run: bool = False) -> dict
                     # --- AUTOMATIC PUSH JOB EVALUATION ---
                     HIGH_SIGNAL_CATS = ["Big Tech AI", "AI Models", "Product Launches", "Funding News"]
                     is_breaking_val = False # Static default on ingest
+                    
+                    logger.info(f"[PUSH-CHECK] id/title: {new_id} / {title[:40]}")
+                    logger.info(f"[PUSH-CHECK] published_at: {pub_dt}")
+                    logger.info(f"[PUSH-CHECK] category: {category}")
+                    logger.info(f"[PUSH-CHECK] is_breaking: {is_breaking_val}")
+
                     should_notify = (category in HIGH_SIGNAL_CATS) or is_breaking_val
                     
                     if should_notify:
+                        logger.info(f"[PUSH-CHECK] decision: SCHEDULE")
+                        logger.info(f"[PUSH-CHECK] reason: Category '{category}' qualifies for push")
                         # Append to qualified list instead of executing immediately
                         metrics["qualified_jobs"].append({
                             "id": new_id,
@@ -700,7 +708,8 @@ def ingest_source(source: dict, seen_images: set, dry_run: bool = False) -> dict
                             "relevance": relevance_score
                         })
                     else:
-                        logger.debug(f"[PUSH-CHECK] Decision: SKIP | Reason: Category '{category}' not top-tier")
+                        logger.info(f"[PUSH-CHECK] decision: SKIP")
+                        logger.info(f"[PUSH-CHECK] reason: Category '{category}' is not high-signal and not breaking")
 
     except Exception as e:
         logger.error(f"Error ingesting {source.get('name', 'unknown')}: {e}")

@@ -345,9 +345,9 @@ def get_articles(category: Optional[str] = None, limit: int = 50, offset: int = 
                 SELECT DISTINCT ON (LOWER(TRIM(title))) *
                 FROM articles
                 WHERE status = 'published' AND category = %s
-                ORDER BY LOWER(TRIM(title)), published_at DESC
+                ORDER BY LOWER(TRIM(title)), COALESCE(published_at, created_at) DESC
             ) sub
-            ORDER BY published_at DESC
+            ORDER BY COALESCE(published_at, created_at) DESC
             LIMIT %s OFFSET %s
         """, (category, limit, offset))
         total_rows = query("SELECT count(DISTINCT LOWER(TRIM(title))) as cnt FROM articles WHERE status = 'published' AND category = %s", (category,))
@@ -357,15 +357,15 @@ def get_articles(category: Optional[str] = None, limit: int = 50, offset: int = 
                 SELECT DISTINCT ON (LOWER(TRIM(title))) *
                 FROM articles
                 WHERE status = 'published' 
-                  AND published_at >= NOW() - INTERVAL '2 days'
+                  AND COALESCE(published_at, created_at) >= NOW() - INTERVAL '2 days'
                   AND title IS NOT NULL AND title != ''
                   AND summary IS NOT NULL AND summary != ''
-                ORDER BY LOWER(TRIM(title)), published_at DESC
+                ORDER BY LOWER(TRIM(title)), COALESCE(published_at, created_at) DESC
             ) sub
-            ORDER BY published_at DESC
+            ORDER BY COALESCE(published_at, created_at) DESC
             LIMIT %s OFFSET %s
         """, (limit, offset))
-        total_rows = query("SELECT count(DISTINCT LOWER(TRIM(title))) as cnt FROM articles WHERE status = 'published' AND published_at >= NOW() - INTERVAL '2 days'")
+        total_rows = query("SELECT count(DISTINCT LOWER(TRIM(title))) as cnt FROM articles WHERE status = 'published' AND COALESCE(published_at, created_at) >= NOW() - INTERVAL '2 days'")
         
         # Extended fallback to 7 days if exact dedupe aggressively shrinks payload
         if (not rows or len(rows) < limit) and offset == 0:
@@ -374,12 +374,12 @@ def get_articles(category: Optional[str] = None, limit: int = 50, offset: int = 
                     SELECT DISTINCT ON (LOWER(TRIM(title))) *
                     FROM articles
                     WHERE status = 'published' 
-                      AND published_at >= NOW() - INTERVAL '7 days'
+                      AND COALESCE(published_at, created_at) >= NOW() - INTERVAL '7 days'
                       AND title IS NOT NULL AND title != ''
                       AND summary IS NOT NULL AND summary != ''
-                    ORDER BY LOWER(TRIM(title)), published_at DESC
+                    ORDER BY LOWER(TRIM(title)), COALESCE(published_at, created_at) DESC
                 ) sub
-                ORDER BY published_at DESC
+                ORDER BY COALESCE(published_at, created_at) DESC
                 LIMIT %s OFFSET %s
             """, (limit, offset))
             total_rows = query("SELECT count(DISTINCT LOWER(TRIM(title))) as cnt FROM articles WHERE status = 'published' AND published_at >= NOW() - INTERVAL '7 days'")

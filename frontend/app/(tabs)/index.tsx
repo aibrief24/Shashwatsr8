@@ -54,6 +54,7 @@ interface Article {
   source_url: string;
   category: string;
   published_at: string;
+  created_at?: string;
   article_url: string;
   is_breaking?: boolean;
   image_source_type?: string;
@@ -504,18 +505,30 @@ export default function HomeFeed() {
 
     try {
       const res = await api.getArticles(undefined, 20, 0);
-      const fetched = res.articles || [];
+      let fetched = res.articles || [];
+      if (fetched.length > 0) {
+        console.log(`[FEED] fetched first article time: ${fetched[0].published_at || fetched[0].created_at}`);
+        console.log(`[FEED] fetched last article time: ${fetched[fetched.length - 1].published_at || fetched[fetched.length - 1].created_at}`);
+      }
 
       setArticles(prev => {
+        const sortArticles = (arr: Article[]) => arr.sort((a, b) => {
+          const timeA = new Date(a.published_at || a.created_at || 0).getTime();
+          const timeB = new Date(b.published_at || b.created_at || 0).getTime();
+          return timeB - timeA;
+        });
+
         // Base case: app is empty, so we seed it natively
         if (prev.length === 0) {
           const uniqueFetched = fetched.filter(
             (v: Article, i: number, a: Article[]) => a.findIndex(t => t.id === v.id) === i
           );
-          setOffset(uniqueFetched.length);
-          setHasMore(uniqueFetched.length === 20);
-          console.log(`[FEED-REFRESH] initial load count: ${uniqueFetched.length}`);
-          return uniqueFetched;
+          const sortedFetch = sortArticles(uniqueFetched);
+          setOffset(sortedFetch.length);
+          setHasMore(sortedFetch.length === 20);
+          console.log(`[FEED-REFRESH] initial load count: ${sortedFetch.length}`);
+          console.log(`[FEED] final sorted order ok`);
+          return sortedFetch;
         }
 
         // Active app case: we check for entirely new articles not currently tracked
@@ -531,7 +544,9 @@ export default function HomeFeed() {
 
           // CRITICAL: shift the loadMore pagination offset window by precisely the length we injected at the top
           setOffset(currentOffset => currentOffset + trulyNew.length);
-          return combined;
+          const finalSorted = sortArticles(combined);
+          console.log(`[FEED] final sorted order ok`);
+          return finalSorted;
         } else {
           console.log('[FEED-REFRESH] no new articles');
           return prev;
@@ -559,10 +574,15 @@ export default function HomeFeed() {
 
       setArticles(prev => {
         const combined = [...prev, ...newArticles];
-        return combined.filter(
+        const unique = combined.filter(
           (v: Article, i: number, a: Article[]) =>
             a.findIndex(t => t.id === v.id) === i
         );
+        return unique.sort((a, b) => {
+          const timeA = new Date(a.published_at || a.created_at || 0).getTime();
+          const timeB = new Date(b.published_at || b.created_at || 0).getTime();
+          return timeB - timeA;
+        });
       });
       setOffset(prev => prev + 15);
       if (newArticles.length < 15) {
