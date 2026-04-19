@@ -23,6 +23,10 @@ async function request(path: string, options: RequestInit = {}, timeoutMs = 3000
     console.log(`[API] <= FINISH ${options.method || 'GET'} ${url} [${res.status}]`);
 
     if (!res.ok) {
+      if (res.status === 401) {
+        throw new Error(JSON.stringify({ code: "SESSION_EXPIRED", message: "Session expired. Please login again." }));
+      }
+
       let errDetail = 'Request failed';
       try {
         const errJson = await res.json();

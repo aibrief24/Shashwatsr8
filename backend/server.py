@@ -475,7 +475,17 @@ def add_bookmark(req: BookmarkRequest, request: Request):
             (uid, req.article_id)
         )
     except Exception as e:
-        logger.warning(f"Bookmark insert error: {e}")
+        error_msg = str(e)
+        logger.warning(f"Bookmark insert error: {error_msg}")
+        if "BOOKMARK_LIMIT_REACHED" in error_msg or "trg_enforce_bookmark_limit" in error_msg:
+            return {
+                "success": False, 
+                "error": "BOOKMARK_LIMIT_REACHED", 
+                "message": "Saved limit reached. You can save up to 100 articles. Remove some old saved articles to save new ones."
+            }
+        if "unique_user_article_bookmark" in error_msg:
+            return {"success": True, "message": "Already Bookmarked"}
+            
     return {"success": True, "message": "Bookmarked"}
 
 

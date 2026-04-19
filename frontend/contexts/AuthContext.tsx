@@ -1,7 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { InteractionManager } from 'react-native';
+import { InteractionManager, Alert } from 'react-native';
+import { router } from 'expo-router';
 import { api } from '@/services/api';
+
+let sessionAlertShown = false;
 
 interface User {
   id: string;
@@ -39,6 +42,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [bookmarkIds, setBookmarkIds] = useState<string[]>([]);
   const [bookmarkedArticlesCache, setBookmarkedArticlesCache] = useState<any[]>([]);
   const [feedArticlesCache, setFeedArticlesCache] = useState<any[]>([]);
+
+  const forceLogout = useCallback(async () => {
+    if (sessionAlertShown) return;
+    sessionAlertShown = true;
+
+    setToken(null);
+    setUser(null);
+    setBookmarkIds([]);
+    setBookmarkedArticlesCache([]);
+
+    try {
+      await AsyncStorage.multiRemove(['auth_token', 'auth_refresh_token']);
+    } catch (e) {
+      console.error('[Perf] Failed to clear auth within forceLogout:', e);
+    }
+
+    router.replace('/login');
+
+    Alert.alert(
+      "Session Expired",
+      "Your session has expired. Please log in again.",
+      [{ text: "OK", onPress: () => { sessionAlertShown = false; } }]
+    );
+  }, []);
 
   useEffect(() => {
     loadSession();
@@ -94,8 +121,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.log('[DEBUG-CRASH] setUser after background sync');
             setUser(me);
           }
-        } catch (e) {
-          console.log('[DEBUG-CRASH] token refresh path start / getMe failed', e);
+        } catch (e: any) {
+          if (e.message && e.message.includes("SESSION_EXPIRED")) {
+            forceLogout();
+          } else {
+            console.log('[DEBUG-CRASH] token refresh path start / getMe failed', e);
+          }
         } finally {
           console.log('[DEBUG-CRASH] syncUser end');
         }
@@ -119,8 +150,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const bm = await api.getBookmarkIds(token);
           console.log('[DEBUG-CRASH] setBookmarkIds after background sync');
           setBookmarkIds(bm.ids || []);
-        } catch (e) {
-          console.log('[DEBUG-CRASH] syncBookmarks failed', e);
+        } catch (e: any) {
+          if (e.message && e.message.includes("SESSION_EXPIRED")) {
+            forceLogout();
+          } else {
+            console.log('[DEBUG-CRASH] syncBookmarks failed', e);
+          }
         } finally {
           console.log('[DEBUG-CRASH] syncBookmarks end');
         }
@@ -233,14 +268,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (isCurrentlyBookmarked) {
         await api.removeBookmark(token, articleId);
       } else {
-        await api.addBookmark(token, articleId);
+        const result = await api.addBookmark(token, articleId);
+        if (result && result.success === false && result.error === 'BOOKMARK_LIMIT_REACHED') {
+          // Rollback immediately 
+          setBookmarkIds(prev => prev.filter(id => id !== articleId));
+          if (fullArticle) {
+            setBookmarkedArticlesCache(prev => prev.filter(a => a.id !== articleId));
+          }
+          Alert.alert("Saved limit reached", result.message || "You can save up to 100 articles. Remove some old saved articles to save new ones.");
+          return;
+        }
       }
-    } catch {
+    } catch (e: any) {
+      if (e.message && e.message.includes("SESSION_EXPIRED")) {
+        forceLogout();
+        return;
+      }
+
       // Rollback on network failure
       if (isCurrentlyBookmarked) {
         setBookmarkIds(prev => [...prev, articleId]);
+        if (fullArticle) {
+          setBookmarkedArticlesCache(prev => [fullArticle, ...prev]);
+        }
       } else {
         setBookmarkIds(prev => prev.filter(id => id !== articleId));
+        if (fullArticle) {
+          setBookmarkedArticlesCache(prev => prev.filter(a => a.id !== articleId));
+        }
       }
     }
   }, [token]);
@@ -254,8 +309,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const bm = await api.getBookmarkIds(token);
       setBookmarkIds(bm.ids || []);
-    } catch { }
-  }, [token]);
+    } catch (e: any) {
+      if (e.message && e.message.includes("SESSION_EXPIRED")) forceLogout();
+    }
+  }, [token, forceLogout]);
 
   return (
     <AuthContext.Provider value={{ user, token, loading, hasOnboarded, bookmarkIds, bookmarkedArticlesCache, setBookmarkedArticlesCache, feedArticlesCache, setFeedArticlesCache, login, signup, logout, forgotPassword, completeOnboarding, toggleBookmark, isBookmarked, refreshBookmarks }}>
