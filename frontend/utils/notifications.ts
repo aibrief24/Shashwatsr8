@@ -5,6 +5,11 @@ import { Platform } from 'react-native';
 import { api } from '@/services/api';
 
 export async function requestAndRegisterPushToken(authToken: string, logPrefix = '[PUSH-FLOW]'): Promise<boolean> {
+    if (Platform.OS === 'web') {
+        console.log('[PUSH] Skipping push registration on web');
+        return false;
+    }
+
     let token;
 
     if (Platform.OS === 'android') {

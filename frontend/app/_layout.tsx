@@ -11,36 +11,54 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
-import { useSegments } from 'expo-router';
+import { useSegments, usePathname } from 'expo-router';
 
 function GlobalAuthObserver() {
   const { loading, token, hasOnboarded } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const pathname = usePathname();
 
-  const lastNotificationResponse = Notifications.useLastNotificationResponse();
   const processedNotificationId = useRef<string | null>(null);
 
   useEffect(() => {
+    if (Platform.OS === 'web') return;
     if (loading || !token || !hasOnboarded) return;
 
-    if (
-      lastNotificationResponse &&
-      lastNotificationResponse.notification.request.content.data.articleId &&
-      lastNotificationResponse.actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER
-    ) {
-      const notifId = lastNotificationResponse.notification.request.identifier;
-      if (processedNotificationId.current !== notifId) {
-        processedNotificationId.current = notifId;
-        const articleId = lastNotificationResponse.notification.request.content.data.articleId;
-        console.log(`[PUSH-NAV] Tapped notification for article: ${articleId}`);
-        router.push(`/article/${articleId}` as any);
+    const handleNotif = (response: any) => {
+      if (
+        response &&
+        response.notification.request.content.data.articleId &&
+        response.actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER
+      ) {
+        const notifId = response.notification.request.identifier;
+        if (processedNotificationId.current !== notifId) {
+          processedNotificationId.current = notifId;
+          const articleId = response.notification.request.content.data.articleId;
+          console.log(`[PUSH-NAV] Tapped notification for article: ${articleId}`);
+          router.push(`/article/${articleId}` as any);
+        }
       }
-    }
-  }, [lastNotificationResponse, loading, token, hasOnboarded, router]);
+    };
+
+    Notifications.getLastNotificationResponseAsync?.().then(response => {
+      if (response) handleNotif(response);
+    });
+
+    const sub = Notifications.addNotificationResponseReceivedListener(handleNotif);
+
+    return () => {
+      sub?.remove?.();
+    };
+  }, [loading, token, hasOnboarded, router]);
 
   useEffect(() => {
     if (loading) return;
+
+    const PUBLIC_ROUTES = ['/privacy', '/terms', '/support', '/delete-account'];
+    if (PUBLIC_ROUTES.includes(pathname)) {
+      return;
+    }
 
     const inAuthGroup = segments[0] === '(tabs)';
     console.log(`[Auth Observer] token: ${!!token}, segment: ${segments[0]}`);
@@ -62,22 +80,24 @@ function GlobalAuthObserver() {
         router.replace('/(tabs)');
       }
     }
-  }, [loading, token, hasOnboarded, segments]);
+  }, [loading, token, hasOnboarded, segments, pathname]);
 
   return null;
 }
 
 try { SplashScreen.preventAutoHideAsync(); } catch { }
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+if (Platform.OS !== 'web') {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
 
 // removed auto-prompting NotificationObserver
 
