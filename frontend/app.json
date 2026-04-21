@@ -21,6 +21,9 @@
     "android": {
       "package": "com.aibrief24.app",
       "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "com.google.android.gms.permission.AD_ID"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#020617"
@@ -33,6 +36,13 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-6497331440034971~8131854655",
+          "iosAppId": "ca-app-pub-6497331440034971~8131854655"
+        }
+      ],
       [
         "expo-splash-screen",
         {

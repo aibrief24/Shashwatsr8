@@ -1,8 +1,9 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform, InteractionManager } from 'react-native';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { AdsContext } from '@/contexts/AdsContext';
 import { Colors } from '@/constants/theme';
 import { useRouter } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -12,6 +13,7 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { useSegments, usePathname } from 'expo-router';
+import mobileAds from 'react-native-google-mobile-ads';
 
 function GlobalAuthObserver() {
   const { loading, token, hasOnboarded } = useAuth();
@@ -117,29 +119,54 @@ function GlobalSplashHider() {
 }
 
 export default function RootLayout() {
+  // ── AdMob boot-safe initialization ──────────────────────────────────────
+  // adsEnabled starts FALSE. NativeAdView is never rendered until this is true.
+  // If mobileAds().initialize() throws for any reason, adsEnabled stays false
+  // and the app continues to work normally — just without ads.
+  const [adsEnabled, setAdsEnabled] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') return;
+
+    console.log('[AdMob] Starting initialization...');
+    mobileAds()
+      .initialize()
+      .then(() => {
+        console.log('[AdMob] Initialization succeeded — ads enabled.');
+        setAdsEnabled(true);
+      })
+      .catch((e: unknown) => {
+        console.warn('[AdMob] Initialization failed — ads disabled. App continues normally.', e);
+        // adsEnabled stays false — no ad components will be rendered
+      });
+  }, []);
+  // ─────────────────────────────────────────────────────────────────────────
+
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <AuthProvider>
-        <StatusBar style="light" />
-        <GlobalSplashHider />
-        <GlobalAuthObserver />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: Colors.background },
-            animation: 'none',
-          }}
-        >
-          <Stack.Screen name="index" />
-          <Stack.Screen name="onboarding" />
-          <Stack.Screen name="login" />
-          <Stack.Screen name="signup" />
-          <Stack.Screen name="forgot-password" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="article/[id]" options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="search" options={{ animation: 'slide_from_right' }} />
-        </Stack>
-      </AuthProvider>
-    </GestureHandlerRootView>
+    <AdsContext.Provider value={{ adsEnabled }}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <AuthProvider>
+          <StatusBar style="light" />
+          <GlobalSplashHider />
+          <GlobalAuthObserver />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: Colors.background },
+              animation: 'none',
+            }}
+          >
+            <Stack.Screen name="index" />
+            <Stack.Screen name="onboarding" />
+            <Stack.Screen name="login" />
+            <Stack.Screen name="signup" />
+            <Stack.Screen name="forgot-password" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="article/[id]" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="search" options={{ animation: 'slide_from_right' }} />
+          </Stack>
+        </AuthProvider>
+      </GestureHandlerRootView>
+    </AdsContext.Provider>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -43,6 +43,7 @@ import {
   Zap,
   Clock,
 } from 'lucide-react-native';
+import { NativeAdCard } from '@/components/NativeAdCard';
 
 interface Article {
   id: string;
@@ -60,6 +61,15 @@ interface Article {
   image_source_type?: string;
 }
 
+// ── Feed item union type ──────────────────────────────────────────────────
+// Using a discriminated union so keyExtractor, renderItem, and getItemLayout
+// can all handle articles and ad slots with stable, predictable behaviour.
+type FeedItem =
+  | { type: 'article'; data: Article; id: string }
+  | { type: 'ad'; id: string };
+// ─────────────────────────────────────────────────────────────────────────
+
+
 function timeAgo(dateStr: string): string {
   const now = new Date();
   const date = new Date(dateStr);
@@ -69,6 +79,7 @@ function timeAgo(dateStr: string): string {
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   return `${Math.floor(diff / 86400)}d ago`;
 }
+
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -492,11 +503,25 @@ export default function HomeFeed() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
-  const flatListRef = useRef<FlatList<Article>>(null);
+  const flatListRef = useRef<FlatList<FeedItem>>(null);
 
   const HEADER_HEIGHT = insets.top + 52;
   const TAB_BAR_OFFSET = Platform.OS === 'ios' ? 100 : 90;
   const CARD_HEIGHT = height - HEADER_HEIGHT;
+
+  // ── Interleaved feed: one ad slot after every 5 articles ──────────────
+  // Stable item IDs: article items use the article UUID, ad slots use
+  // 'ad-after-<position>' which is deterministic and never changes per article.
+  const feedItems = useMemo<FeedItem[]>(() => {
+    const items: FeedItem[] = [];
+    articles.forEach((article, i) => {
+      items.push({ type: 'article', data: article, id: article.id });
+      if ((i + 1) % 5 === 0) {
+        items.push({ type: 'ad', id: `ad-after-${i}` });
+      }
+    });
+    return items;
+  }, [articles]);
 
   const refreshArticles = async (silent = false, isPullRefresh = false) => {
     // If it's a silent check from AppState or Focus, we don't trigger the UI spinners unless list is completely empty
@@ -665,15 +690,25 @@ export default function HomeFeed() {
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
 
   const renderCard = useCallback(
-    ({ item: article, index }: { item: Article; index: number }) => (
-      <ArticleCard
-        article={article}
-        index={index}
-        handleShare={handleShare}
-        TAB_BAR_OFFSET={TAB_BAR_OFFSET}
-        CARD_HEIGHT={CARD_HEIGHT}
-      />
-    ),
+    ({ item, index }: { item: FeedItem; index: number }) => {
+      if (item.type === 'ad') {
+        return (
+          <NativeAdCard
+            cardHeight={CARD_HEIGHT}
+            tabBarOffset={TAB_BAR_OFFSET}
+          />
+        );
+      }
+      return (
+        <ArticleCard
+          article={item.data}
+          index={index}
+          handleShare={handleShare}
+          TAB_BAR_OFFSET={TAB_BAR_OFFSET}
+          CARD_HEIGHT={CARD_HEIGHT}
+        />
+      );
+    },
     [handleShare, TAB_BAR_OFFSET, CARD_HEIGHT]
   );
   const renderHeaderLayout = () => (
@@ -810,7 +845,7 @@ export default function HomeFeed() {
             <FlatList
               ref={flatListRef}
               testID="feed-list"
-              data={articles}
+              data={feedItems}
               renderItem={renderCard}
               keyExtractor={(item) => item.id}
               refreshing={refreshing}
