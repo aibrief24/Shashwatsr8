@@ -14,7 +14,7 @@ from auth import (
     supabase_refresh_token, supabase_reset_password, supabase_logout,
     get_current_user,
 )
-from database import query, execute, insert_returning
+from database import query, execute, insert_returning, health_check_db
 from notifier import send_expo_notifications
 
 ROOT_DIR = Path(__file__).parent
@@ -712,6 +712,15 @@ def health():
         }
     except Exception as e:
         return {"status": "error", "detail": str(e)}
+
+
+@api_router.get("/health/db")
+def health_db():
+    """Lightweight DB connectivity check — SELECT 1."""
+    result = health_check_db()
+    if result["status"] != "ok":
+        raise HTTPException(503, detail=result.get("detail", "Database unreachable"))
+    return result
 
 @api_router.get("/")
 def root():
