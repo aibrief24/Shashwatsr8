@@ -15,7 +15,7 @@ import re
 import feedparser
 import requests
 from urllib.parse import urlparse
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -117,6 +117,17 @@ FORBIDDEN_KEYWORDS = [
 
 DEFAULT_CATEGORY = "Latest"
 
+# ─── Notification scheduling config ───────────────────────────────────────────
+NOTIFICATION_CONFIG = {
+    "HIGH_SIGNAL_CATS": ["Big Tech AI", "AI Models"],
+    "MIN_RELEVANCE_FOR_NOTIFY": 5.0,
+    "MIN_CONFIDENCE_FOR_NOTIFY": 5.0,
+    "MAX_NOTIFICATIONS_PER_DAY": 6,
+    "MIN_GAP_BETWEEN_NOTIFICATIONS_MINS": 20,
+    "QUIET_HOURS_START_IST": 22,
+    "QUIET_HOURS_END_IST": 7,
+    "MAX_JOB_AGE_MINUTES": 90,
+}
 
 
 def _calculate_ai_relevance(title: str, text: str) -> float:
@@ -544,6 +555,25 @@ def _get_arxiv_image(article_url: str, article_id: str, title: str = "") -> tupl
     return fallback, "arxiv_pool"
 
 
+def _shift_past_quiet_hours(dt: datetime) -> datetime:
+    """If dt falls in IST quiet hours, push to next active window start."""
+    ist_offset = timedelta(hours=5, minutes=30)
+    dt_ist = dt + ist_offset
+    quiet_start = NOTIFICATION_CONFIG["QUIET_HOURS_START_IST"]
+    quiet_end = NOTIFICATION_CONFIG["QUIET_HOURS_END_IST"]
+    hour_ist = dt_ist.hour
+
+    if hour_ist >= quiet_start:
+        target_ist = (dt_ist + timedelta(days=1)).replace(
+            hour=quiet_end, minute=0, second=0, microsecond=0
+        )
+        return target_ist - ist_offset
+    if hour_ist < quiet_end:
+        target_ist = dt_ist.replace(hour=quiet_end, minute=0, second=0, microsecond=0)
+        return target_ist - ist_offset
+    return dt
+
+
 def ingest_source(source: dict, seen_images: set, dry_run: bool = False) -> dict:
     """Ingest articles from a single RSS source.
     Returns metrics dict.
@@ -687,15 +717,21 @@ def ingest_source(source: dict, seen_images: set, dry_run: bool = False) -> dict
                     logger.info(f"Added [{category}] {source['name']}: {title[:55]}")
                     
                     # --- AUTOMATIC PUSH JOB EVALUATION ---
-                    HIGH_SIGNAL_CATS = ["Big Tech AI", "AI Models", "Product Launches", "Funding News"]
-                    is_breaking_val = False # Static default on ingest
-                    
-                    logger.info(f"[PUSH-CHECK] id/title: {new_id} / {title[:40]}")
-                    logger.info(f"[PUSH-CHECK] published_at: {pub_dt}")
-                    logger.info(f"[PUSH-CHECK] category: {category}")
-                    logger.info(f"[PUSH-CHECK] is_breaking: {is_breaking_val}")
+                    HIGH_SIGNAL_CATS = NOTIFICATION_CONFIG["HIGH_SIGNAL_CATS"]
+                    MIN_RELEVANCE = NOTIFICATION_CONFIG["MIN_RELEVANCE_FOR_NOTIFY"]
+                    MIN_CONFIDENCE = NOTIFICATION_CONFIG["MIN_CONFIDENCE_FOR_NOTIFY"]
+                    is_breaking_val = False  # Static default on ingest
 
-                    should_notify = (category in HIGH_SIGNAL_CATS) or is_breaking_val
+                    logger.info(f"[PUSH-CHECK] id/title: {new_id} / {title[:40]}")
+                    logger.info(
+                        f"[PUSH-CHECK] category={category} | relevance={relevance_score} | confidence={conf_score}"
+                    )
+
+                    should_notify = is_breaking_val or (
+                        category in HIGH_SIGNAL_CATS
+                        and relevance_score >= MIN_RELEVANCE
+                        and conf_score >= MIN_CONFIDENCE
+                    )
                     
                     if should_notify:
                         logger.info(f"[PUSH-CHECK] decision: SCHEDULE")
@@ -774,42 +810,73 @@ def run_ingestion(dry_run: bool = False) -> dict:
     logger.info(f"Ingestion complete: {len(all_new_ids)} new articles from {len(sources)} sources")
     
     if all_qualified_jobs and not dry_run:
-        logger.info(f"[PUSH-SCHEDULER] Sorting {len(all_qualified_jobs)} qualified jobs for rate limit spacing.")
-        
-        # Priority map: lower index = higher priority
-        priority_map = {
-            "Big Tech AI": 1,
-            "AI Models": 2,
-            "Product Launches": 3,
-            "Funding News": 4
-        }
-        
-        # Sort jobs: breaking first, then highest category priority, then relevance score
-        sorted_jobs = sorted(
-            all_qualified_jobs,
-            key=lambda j: (
-                0 if j["is_breaking"] else 1,
-                priority_map.get(j["category"], 99),
-                -j["relevance"]
+        logger.info(f"[PUSH-SCHEDULER] {len(all_qualified_jobs)} qualified jobs to schedule.")
+
+        # 1. Daily cap — count jobs already scheduled today
+        try:
+            today_count_row = query(
+                "SELECT COUNT(*) AS c FROM notification_jobs WHERE scheduled_at >= CURRENT_DATE"
             )
-        )
-        
-        for idx, job in enumerate(sorted_jobs):
-            # Rank 0 is exactly now. Ensuing ranks step by +45 minutes
-            interval_mins = idx * 45
-            
-            job_id = job["id"]
-            cat = job["category"]
-            
-            try:
-                execute(
-                    f"INSERT INTO notification_jobs (article_id, scheduled_at) VALUES (%s, NOW() + INTERVAL '{interval_mins} minutes') ON CONFLICT DO NOTHING",
-                    (job_id,)
-                )
-                logger.info(f"[PUSH-SCHEDULER] Job {job_id} ({cat}) -> Scheduled +{interval_mins}m")
-                metrics["jobs_created"] += 1
-            except Exception as e:
-                logger.error(f"[PUSH-SCHEDULER] Error inserting Job {job_id}: {e}")
+            already_scheduled = today_count_row[0]["c"] if today_count_row else 0
+        except Exception as e:
+            logger.warning(f"[PUSH-SCHEDULER] Could not query today's jobs: {e}")
+            already_scheduled = 0
+
+        max_per_day = NOTIFICATION_CONFIG["MAX_NOTIFICATIONS_PER_DAY"]
+        slots_remaining = max(0, max_per_day - already_scheduled)
+
+        if slots_remaining == 0:
+            logger.info(
+                f"[PUSH-SCHEDULER] Daily cap reached "
+                f"(already={already_scheduled}, max={max_per_day}). Skipping all."
+            )
+        else:
+            # 2. Sort by priority
+            priority_map = {
+                "Big Tech AI": 1,
+                "AI Models": 2,
+                "Product Launches": 3,
+                "Funding News": 4,
+            }
+            sorted_jobs = sorted(
+                all_qualified_jobs,
+                key=lambda j: (
+                    0 if j["is_breaking"] else 1,
+                    priority_map.get(j["category"], 99),
+                    -j["relevance"],
+                ),
+            )
+
+            # 3. Truncate to remaining daily slots
+            sorted_jobs = sorted_jobs[:slots_remaining]
+            logger.info(
+                f"[PUSH-SCHEDULER] Scheduling {len(sorted_jobs)} jobs "
+                f"(already_today={already_scheduled}, cap={max_per_day})"
+            )
+
+            # 4. Schedule each with min-gap spacing + quiet-hours shifting
+            gap_mins = NOTIFICATION_CONFIG["MIN_GAP_BETWEEN_NOTIFICATIONS_MINS"]
+            now_utc = datetime.now(timezone.utc)
+
+            for idx, job in enumerate(sorted_jobs):
+                base_time = now_utc + timedelta(minutes=idx * gap_mins)
+                scheduled_time = _shift_past_quiet_hours(base_time)
+
+                job_id = job["id"]
+                cat = job["category"]
+
+                try:
+                    execute(
+                        "INSERT INTO notification_jobs (article_id, scheduled_at) "
+                        "VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                        (job_id, scheduled_time),
+                    )
+                    logger.info(
+                        f"[PUSH-SCHEDULER] Job {job_id} ({cat}) → {scheduled_time.isoformat()}"
+                    )
+                    metrics["jobs_created"] += 1
+                except Exception as e:
+                    logger.error(f"[PUSH-SCHEDULER] Error inserting Job {job_id}: {e}")
     
     if metrics["jobs_created"] > 0 and not dry_run:
         try:
