@@ -106,27 +106,18 @@ def run_pending_jobs(limit: int = 50, admin_key: str = "") -> dict:
     """
     conn = _db_conn()
     try:
-        # ── 0. Native Rate Limits & Spacing ───────────────────────────────────
+        # Daily-limit enforcement happens upstream in ingestor.py
+        # (NOTIFICATION_CONFIG["MAX_NOTIFICATIONS_PER_DAY"]). The worker no longer
+        # enforces its own cap to avoid double-counting and timezone mismatch.
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT
-                    COUNT(*) FILTER (WHERE processed_at >= NOW() - INTERVAL '24 HOURS' AND status = 'sent') as daily_sent,
-                    MAX(processed_at) FILTER (WHERE status = 'sent') as last_sent_time
+                SELECT MAX(processed_at) FILTER (WHERE status = 'sent') as last_sent_time
                 FROM notification_jobs
             """)
             row = cur.fetchone()
-            daily_sent = row[0] or 0
-            last_sent_time = row[1]
-            
-            # 1. Enforce Daily Limit (4)
-            if daily_sent >= 4:
-                logger.info(f"[PUSH-WORKER] Throttled. Daily cap of 4 reached ({daily_sent} sent today).")
-                # Immediately map all presently queued jobs to 'skipped'
-                cur.execute("UPDATE notification_jobs SET status='skipped', error='daily limit reached', updated_at=NOW() WHERE status='pending' AND scheduled_at <= NOW()")
-                conn.commit()
-                return {"processed": 0, "sent": 0, "failed": 0, "no_tokens": 0, "throttled": "daily_limit_exceeded"}
+            last_sent_time = row[0]
 
-            # 2. Enforce 30-min Global Buffer
+            # ── 0. Enforce 30-min Global Buffer ───────────────────────────────
             if last_sent_time:
                 cur.execute("SELECT EXTRACT(EPOCH FROM (NOW() - %s))", (last_sent_time,))
                 diff_row = cur.fetchone()
