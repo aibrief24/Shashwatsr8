@@ -1,8 +1,45 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 const BASE_URL =
   process.env.EXPO_PUBLIC_BACKEND_URL ||
   'https://aibrief24-backend.onrender.com';
 
-async function request(path: string, options: RequestInit = {}, timeoutMs = 30000) {
+// These paths must never trigger a token refresh on 401 (no token yet, or would loop)
+const NO_REFRESH_PATHS = ['/auth/refresh', '/auth/login', '/auth/signup'];
+
+// Promise lock — concurrent 401s share one refresh call instead of stampeding
+let _refreshPromise: Promise<string | null> | null = null;
+
+// Callback registered by AuthContext to sync the new token into React state
+let _tokenUpdateHandler: ((newToken: string) => void) | null = null;
+
+export function setTokenUpdateHandler(handler: (newToken: string) => void): void {
+  _tokenUpdateHandler = handler;
+}
+
+async function _doRefresh(): Promise<string | null> {
+  try {
+    const rt = await AsyncStorage.getItem('auth_refresh_token');
+    if (!rt) return null;
+    const res = await request('/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ refresh_token: rt }),
+    });
+    if (res?.access_token) {
+      await AsyncStorage.setItem('auth_token', res.access_token);
+      if (res.refresh_token) {
+        await AsyncStorage.setItem('auth_refresh_token', res.refresh_token);
+      }
+      if (_tokenUpdateHandler) _tokenUpdateHandler(res.access_token);
+      return res.access_token;
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function request(path: string, options: RequestInit = {}, timeoutMs = 30000, _isRetry = false) {
   const url = `${BASE_URL}/api${path}`;
   console.log(`[API] => START ${options.method || 'GET'} ${url}`);
 
@@ -24,7 +61,37 @@ async function request(path: string, options: RequestInit = {}, timeoutMs = 3000
 
     if (!res.ok) {
       if (res.status === 401) {
-        throw new Error(JSON.stringify({ code: "SESSION_EXPIRED", message: "Session expired. Please login again." }));
+        const isAuthPath = NO_REFRESH_PATHS.some(p => path.startsWith(p));
+        if (isAuthPath || _isRetry) {
+          // Auth endpoints or already-retried requests go straight to SESSION_EXPIRED
+          throw new Error(JSON.stringify({ code: "SESSION_EXPIRED", message: "Session expired. Please login again." }));
+        }
+
+        // Use promise lock so concurrent 401s share one refresh call
+        if (!_refreshPromise) {
+          _refreshPromise = _doRefresh().finally(() => { _refreshPromise = null; });
+        }
+
+        let newToken: string | null = null;
+        try {
+          newToken = await _refreshPromise;
+        } catch {
+          newToken = null;
+        }
+
+        if (!newToken) {
+          throw new Error(JSON.stringify({ code: "SESSION_EXPIRED", message: "Session expired. Please login again." }));
+        }
+
+        // Retry the original request once with the refreshed token
+        console.log(`[API] => RETRY after token refresh ${options.method || 'GET'} ${url}`);
+        return request(path, {
+          ...options,
+          headers: {
+            ...options.headers,
+            Authorization: `Bearer ${newToken}`,
+          },
+        }, timeoutMs, true);
       }
 
       let errDetail = 'Request failed';

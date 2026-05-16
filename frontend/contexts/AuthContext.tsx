@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { InteractionManager, Alert } from 'react-native';
+import { InteractionManager, Alert, AppState } from 'react-native';
 import { router } from 'expo-router';
-import { api } from '@/services/api';
+import { api, setTokenUpdateHandler } from '@/services/api';
 
 let sessionAlertShown = false;
 
@@ -71,6 +71,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loadSession();
   }, []);
 
+  // Register handler so api.ts can push refreshed tokens into React state
+  useEffect(() => {
+    setTokenUpdateHandler((newToken) => setToken(newToken));
+  }, []);
+
+  // Proactive refresh every 50 minutes and on app foreground
+  useEffect(() => {
+    if (!token) return;
+
+    const refreshIfNeeded = async () => {
+      try {
+        const rt = await AsyncStorage.getItem('auth_refresh_token');
+        if (!rt) return;
+        const res = await api.refreshToken(rt);
+        if (res?.access_token) {
+          await AsyncStorage.setItem('auth_token', res.access_token);
+          if (res.refresh_token) {
+            await AsyncStorage.setItem('auth_refresh_token', res.refresh_token);
+          }
+          setToken(res.access_token);
+        }
+      } catch (e) {
+        console.log('[AUTH] Proactive refresh failed (will retry on next 401):', e);
+      }
+    };
+
+    const interval = setInterval(refreshIfNeeded, 50 * 60 * 1000);
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshIfNeeded();
+    });
+
+    return () => {
+      clearInterval(interval);
+      sub.remove();
+    };
+  }, [token]);
+
   const clearStoredAuth = async () => {
     try {
       await AsyncStorage.multiRemove(['auth_token', 'auth_refresh_token']);
@@ -93,7 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setTimeout(() => reject(new Error('AsyncStorage timeout')), 3000)
       );
 
-      const [savedToken, savedRefresh, onboarded] = await Promise.race([storagePromise, timeoutPromise]) as any;
+      const [savedToken, , onboarded] = await Promise.race([storagePromise, timeoutPromise]) as any;
 
       setHasOnboarded(onboarded === 'true');
 
@@ -270,7 +307,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         const result = await api.addBookmark(token, articleId);
         if (result && result.success === false && result.error === 'BOOKMARK_LIMIT_REACHED') {
-          // Rollback immediately 
+          // Rollback immediately
           setBookmarkIds(prev => prev.filter(id => id !== articleId));
           if (fullArticle) {
             setBookmarkedArticlesCache(prev => prev.filter(a => a.id !== articleId));
