@@ -120,10 +120,10 @@ DEFAULT_CATEGORY = "Latest"
 # ─── Notification scheduling config ───────────────────────────────────────────
 NOTIFICATION_CONFIG = {
     "HIGH_SIGNAL_CATS": ["Big Tech AI", "AI Models", "Funding News", "Product Launches", "AI Research", "AI Tools"],
-    "MIN_RELEVANCE_FOR_NOTIFY": 4.0,
-    "MIN_CONFIDENCE_FOR_NOTIFY": 3.5,
-    "MAX_NOTIFICATIONS_PER_DAY": 6,
-    "MIN_GAP_BETWEEN_NOTIFICATIONS_MINS": 20,
+    "MIN_RELEVANCE_FOR_NOTIFY": 3.0,
+    "MIN_CONFIDENCE_FOR_NOTIFY": 0.0,
+    "MAX_NOTIFICATIONS_PER_DAY": 10,
+    "MIN_GAP_BETWEEN_NOTIFICATIONS_MINS": 15,
     "QUIET_HOURS_START_IST": 22,
     "QUIET_HOURS_END_IST": 7,
     "MAX_JOB_AGE_MINUTES": 90,
