@@ -25,35 +25,32 @@ export default function ResetPasswordScreen() {
 
     const parseDeepLink = (url: string | null) => {
         if (!url) return;
-
         if (url.includes('expo-development-client')) {
             setDevWarning(true);
         }
-
         try {
-            const queryPart = url.split('?')[1] || '';
-            const hashPart = url.split('#')[1] || '';
-
-            const queryParams = new URLSearchParams(queryPart.split('#')[0]);
-            const hashParams = new URLSearchParams(hashPart);
-
             console.log(`[RESET-PASSWORD] full initial url = ${url}`);
-            console.log(`[RESET-PASSWORD] query keys = ${Array.from(queryParams.keys()).join(', ')}`);
-            console.log(`[RESET-PASSWORD] hash keys = ${Array.from(hashParams.keys()).join(', ')}`);
-
             const r_access_token = matchParam(url, 'access_token');
             const r_refresh_token = matchParam(url, 'refresh_token');
             const r_code = matchParam(url, 'code');
             const r_type = matchParam(url, 'type');
-
+            const r_token = matchParam(url, 'token');
             console.log(`[RESET-PASSWORD] access_token present = ${!!r_access_token}`);
             console.log(`[RESET-PASSWORD] refresh_token present = ${!!r_refresh_token}`);
             console.log(`[RESET-PASSWORD] code present = ${!!r_code}`);
+            console.log(`[RESET-PASSWORD] token present = ${!!r_token}`);
             console.log(`[RESET-PASSWORD] type = ${r_type}`);
-
-            if (r_type === 'recovery') {
-                if (r_access_token) setAccessToken(r_access_token);
-                if (r_code) setCode(r_code);
+            if (r_access_token) {
+                console.log(`[RESET-PASSWORD] captured access_token`);
+                setAccessToken(r_access_token);
+            }
+            if (r_code) {
+                console.log(`[RESET-PASSWORD] captured code`);
+                setCode(r_code);
+            }
+            if (r_token && !r_access_token && !r_code) {
+                console.log(`[RESET-PASSWORD] captured verify-endpoint token as code`);
+                setCode(r_token);
             }
         } catch (e) {
             console.log(`[RESET-PASSWORD] parse error: ${e}`);
