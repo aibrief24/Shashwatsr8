@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Platform, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,15 +16,15 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function BookmarksScreen() {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const { token, toggleBookmark, bookmarkIds, bookmarkedArticlesCache, setBookmarkedArticlesCache } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
   const loadBookmarks = useCallback(async () => {
-    if (!token) return;
+    if (!token) { setLoading(false); return; }
     // If the cache already has all bookmarked articles, do not refetch
-    if (bookmarkedArticlesCache.length >= bookmarkIds.length && bookmarkIds.length > 0) return;
+    if (bookmarkedArticlesCache.length >= bookmarkIds.length && bookmarkIds.length > 0) { setLoading(false); return; }
 
     setLoading(true);
     try {
@@ -39,6 +39,14 @@ export default function BookmarksScreen() {
     await toggleBookmark(id, true);
     // Context cache will auto-update optimistically 
   };
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background }}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <View testID="bookmarks-screen" style={[styles.container, { paddingTop: insets.top }]}>
