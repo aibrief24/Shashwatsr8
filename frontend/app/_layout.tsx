@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { Platform, InteractionManager } from 'react-native';
+import { Platform, InteractionManager, Linking } from 'react-native';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { AdsContext } from '@/contexts/AdsContext';
 import { Colors } from '@/constants/theme';
@@ -14,6 +14,7 @@ import * as Notifications from 'expo-notifications';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { useSegments, usePathname } from 'expo-router';
 import mobileAds from 'react-native-google-mobile-ads';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 function GlobalAuthObserver() {
   const { loading, token, hasOnboarded } = useAuth();
@@ -103,6 +104,27 @@ if (Platform.OS !== 'web') {
 
 // removed auto-prompting NotificationObserver
 
+function GlobalDeepLinkCapture() {
+  useEffect(() => {
+    const captureUrl = async (url: string | null) => {
+      if (!url) return;
+      console.log(`[DeepLink] Captured URL: ${url}`);
+      if (url.includes('reset-password')) {
+        console.log(`[DeepLink] Storing reset-password URL to AsyncStorage`);
+        try {
+          await AsyncStorage.setItem('@pending_reset_url', url);
+        } catch (e) {
+          console.error('[DeepLink] Failed to store URL', e);
+        }
+      }
+    };
+    Linking.getInitialURL().then(captureUrl).catch((e) => console.error('[DeepLink] getInitialURL error', e));
+    const sub = Linking.addEventListener('url', ({ url }) => captureUrl(url));
+    return () => sub.remove();
+  }, []);
+  return null;
+}
+
 function GlobalSplashHider() {
   useEffect(() => {
     console.log('[Startup] Setting 800ms timer to hide splash screen');
@@ -148,6 +170,7 @@ export default function RootLayout() {
         <AuthProvider>
           <StatusBar style="light" />
           <GlobalSplashHider />
+          <GlobalDeepLinkCapture />
           <GlobalAuthObserver />
           <Stack
             screenOptions={{

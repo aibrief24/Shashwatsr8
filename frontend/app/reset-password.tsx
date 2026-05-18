@@ -5,6 +5,7 @@ import { Colors, FontSize, Radius } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Lock, ArrowLeft, CheckCircle } from 'lucide-react-native';
 import { api } from '@/services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ResetPasswordScreen() {
     const [password, setPassword] = useState('');
@@ -58,8 +59,27 @@ export default function ResetPasswordScreen() {
     };
 
     useEffect(() => {
-        Linking.getInitialURL().then((url) => parseDeepLink(url));
-        const sub = Linking.addEventListener('url', ({ url }) => parseDeepLink(url));
+        const loadUrl = async () => {
+            try {
+                const storedUrl = await AsyncStorage.getItem('@pending_reset_url');
+                if (storedUrl) {
+                    console.log(`[RESET-PASSWORD] Loaded URL from storage: ${storedUrl}`);
+                    parseDeepLink(storedUrl);
+                    await AsyncStorage.removeItem('@pending_reset_url');
+                    return;
+                }
+            } catch (e) {
+                console.error('[RESET-PASSWORD] Storage read error', e);
+            }
+            const initialUrl = await Linking.getInitialURL();
+            console.log(`[RESET-PASSWORD] getInitialURL returned: ${initialUrl}`);
+            if (initialUrl) parseDeepLink(initialUrl);
+        };
+        loadUrl();
+        const sub = Linking.addEventListener('url', ({ url }) => {
+            console.log(`[RESET-PASSWORD] url event received: ${url}`);
+            parseDeepLink(url);
+        });
         return () => sub.remove();
     }, []);
 

@@ -106,3 +106,25 @@ backend/.env.*
 *token.json*
 *credentials.js
 
+
+# Android signing credentials (NEVER COMMIT - contains keystore password)
+frontend/android/key.properties
+
+# Android signing & keys (NEVER commit)
+frontend/android/app/*.keystore
+frontend/android/app/debug.keystore
+frontend/android/app/google-services.json
+frontend/android/key.properties
+frontend/android/app/build.gradle.bak
+frontend/android/app/build.gradle.bak2
+
+# Build artifacts
+frontend/build-*.aab
+frontend/android/app/build/
+
+# Backend debug
+backend/output*.txt
+
+# OS files
+.DS_Store
+.swp

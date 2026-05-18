@@ -2,7 +2,7 @@
   "expo": {
     "name": "AIBrief24",
     "slug": "aibrief24",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "aibrief24",
@@ -19,7 +19,7 @@
       }
     },
     "android": {
-      "versionCode": 3,
+      "versionCode": 4,
       "package": "com.aibrief24.app",
       "googleServicesFile": "./google-services.json",
       "permissions": [
