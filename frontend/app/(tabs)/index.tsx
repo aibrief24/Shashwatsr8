@@ -868,7 +868,15 @@ export default function HomeFeed() {
               })}
               contentContainerStyle={{ paddingBottom: TAB_BAR_OFFSET }}
               onEndReached={loadMore}
-              onEndReachedThreshold={0.5}
+              onEndReachedThreshold={3}
+              onScroll={(e) => {
+                const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent;
+                const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+                if (distanceFromBottom < CARD_HEIGHT * 3 && !loadingMore && hasMore) {
+                  loadMore();
+                }
+              }}
+              scrollEventThrottle={400}
               ListFooterComponent={loadingMore ? (
                 <View style={{ height: 100, justifyContent: 'center', alignItems: 'center' }}>
                   <ActivityIndicator size="small" color={Colors.primary} />
