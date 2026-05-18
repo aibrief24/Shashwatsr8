@@ -228,18 +228,20 @@ const styles = StyleSheet.create({
     },
     mediaView: {
         width: '100%',
-        height: 180,
+        flex: 1,
+        minHeight: 400,
         backgroundColor: Colors.surfaceHighlight,
     },
     mediaPlaceholder: {
         width: '100%',
-        height: 180,
+        flex: 1,
+        minHeight: 400,
         backgroundColor: Colors.surfaceHighlight,
     },
     contentArea: {
-        flex: 1,
         paddingHorizontal: 20,
         paddingTop: 14,
+        paddingBottom: 20,
         gap: 10,
     },
     headline: {
