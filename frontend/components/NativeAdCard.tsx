@@ -228,12 +228,12 @@ const styles = StyleSheet.create({
     },
     mediaView: {
         width: '100%',
-        height: 300,
+        height: 200,
         backgroundColor: Colors.surfaceHighlight,
     },
     mediaPlaceholder: {
         width: '100%',
-        height: 300,
+        height: 200,
         backgroundColor: Colors.surfaceHighlight,
     },
     contentArea: {
