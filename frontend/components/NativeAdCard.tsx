@@ -145,7 +145,7 @@ function NativeAdLoader({ cardHeight, tabBarOffset }: NativeAdCardProps) {
                 <Text style={styles.adSponsored}>Sponsored</Text>
             </View>
 
-            <NativeMediaView style={styles.mediaView} resizeMode="cover" />
+            <NativeMediaView style={styles.mediaView} resizeMode="contain" />
 
             <View style={[styles.contentArea, { paddingBottom: tabBarOffset }]}>
                 <NativeAsset assetType={NativeAssetType.HEADLINE}>
@@ -228,17 +228,16 @@ const styles = StyleSheet.create({
     },
     mediaView: {
         width: '100%',
-        flex: 1,
-        minHeight: 400,
+        height: 300,
         backgroundColor: Colors.surfaceHighlight,
     },
     mediaPlaceholder: {
         width: '100%',
-        flex: 1,
-        minHeight: 400,
+        height: 300,
         backgroundColor: Colors.surfaceHighlight,
     },
     contentArea: {
+        flex: 1,
         paddingHorizontal: 20,
         paddingTop: 14,
         paddingBottom: 20,
