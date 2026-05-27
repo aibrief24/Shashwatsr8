@@ -589,7 +589,9 @@ def ingest_source(source: dict, seen_images: set, dry_run: bool = False) -> dict
             metrics["feed_error"] = True
             return metrics
 
-        for entry in feed.entries[:15]:  # Max 15 per source
+        # arXiv dumps 5-15 papers per feed - throttle to prevent bulk dumps in user feed
+        source_limit = 2 if "arxiv" in source.get("name", "").lower() else 15
+        for entry in feed.entries[:source_limit]:
             article_url = entry.get("link", "").strip()
             if not article_url:
                 continue
