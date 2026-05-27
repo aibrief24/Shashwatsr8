@@ -49,14 +49,14 @@ CATEGORY_RULES = {
     "AI Models": {
         "required": ["gpt-4", "gpt-5", "claude 3", "gemini 1.5", "llama 3", "mistral", "o1", "o3", "deepseek", "qwen", "phi-3", "open-source model", "frontier model", "large language model", "llm", "parameters", "benchmark", "weights"],
         "bonus": ["architecture", "inference", "training", "multi-modal", "capability", "context window"],
-        "penalty": ["powered by", "integration", "app", "raises", "funding", "feature", "launches new feature", "startup", "platform", "tutorial", "how to", "api", "setup", "install", "guide", "researchers", "study", "framework", "paper", "arxiv", "applied", "infrastructure", "reading list", "developer", "usage", "safety", "privacy", "embeddings", "clustering", "unmask", "pseudonymous", "scikit-learn", "beginner", "implementation", "how-to", "series a", "series b", "seed round"],
-        "threshold": 3.0
+        "penalty": ["powered by", "integration", "app", "raises", "funding", "feature", "launches new feature", "startup", "platform", "tutorial", "how to", "api", "setup", "install", "guide", "researchers", "study", "framework", "paper", "arxiv", "applied", "infrastructure", "reading list", "developer", "usage", "safety", "privacy", "embeddings", "clustering", "unmask", "pseudonymous", "scikit-learn", "beginner", "implementation", "how-to", "series a", "series b", "seed round", "we propose", "we present", "we show", "we demonstrate", "novel approach", "preprint", "abstract", "ablation", "evaluation methodology", "research lab", "research team"],
+        "threshold": 3.5
     },
     "AI Tools": {
         "required": ["tool", "saas", "workflow", "agent", "automation", "platform", "app", "copilot", "plugin", "extension", "productivity", "assistant", "api", "sdk"],
         "bonus": ["no-code", "low-code", "interface", "generate", "automate"],
-        "penalty": ["funding", "raises", "arxiv", "parameter", "weights", "architecture", "benchmark", "series a", "series b", "seed round", "researchers", "study", "framework", "paper", "consumer", "tv", "router", "smartphone", "laptop"],
-        "threshold": 3.0
+        "penalty": ["funding", "raises", "arxiv", "parameter", "weights", "architecture", "benchmark", "series a", "series b", "seed round", "researchers", "study", "framework", "paper", "consumer", "tv", "router", "smartphone", "laptop", "we propose", "we present", "we show", "we demonstrate", "novel approach", "preprint", "abstract", "ablation", "evaluation", "experiment", "fine-tuned", "pretrained", "scientists", "academic", "university", "methodology", "icml", "neurips", "iclr", "acl", "cvpr"],
+        "threshold": 3.5
     },
     "AI Startups": {
         "required": ["startup", "founder", "entrepreneur", "stealth", "y combinator", "incubator", "early-stage"],
@@ -89,10 +89,10 @@ CATEGORY_RULES = {
         "threshold": 3.0
     },
     "AI Research": {
-        "required": ["arxiv", "paper", "researchers", "study", "findings", "new method", "state-of-the-art", "sota", "framework", "academic", "university", "evaluation", "breakthrough", "experiment", "scientists"],
-        "bonus": ["dataset", "algorithm", "mit", "stanford", "harvard", "oxford"],
+        "required": ["arxiv", "paper", "researchers", "study", "findings", "new method", "state-of-the-art", "sota", "framework", "academic", "university", "evaluation", "breakthrough", "experiment", "scientists", "we propose", "we present", "we show", "we demonstrate", "novel approach", "preprint", "abstract", "methodology", "ablation", "fine-tuned", "pretrained", "benchmark dataset", "research lab", "research team"],
+        "bonus": ["dataset", "algorithm", "mit", "stanford", "harvard", "oxford", "outperforms", "results show", "we find", "neurips", "icml", "iclr", "acl", "cvpr", "emnlp"],
         "penalty": ["launches", "startup", "funding", "raises", "app", "product", "series a", "series b", "plugin", "extension", "tutorial", "how to", "guide"],
-        "threshold": 3.0
+        "threshold": 2.5
     }
 }
 
