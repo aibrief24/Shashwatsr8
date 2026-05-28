@@ -307,10 +307,14 @@ def _clean_summary_text(text: str) -> str:
     return res or text
 
 
-def _generate_summary(title: str, content: str) -> str:
-    """Use OpenAI to generate a premium, informative summary. Falls back to truncated content."""
+def _generate_summary_and_category(title: str, content: str) -> dict:
+    """Use OpenAI to generate summary AND categorize in one call.
+    Returns {"summary": str, "category": str | None}.
+    category is None if LLM fails - caller falls back to keyword scoring."""
+    fallback_summary = (content[:400] + "...") if len(content) > 400 else (content or title)
+
     if not _openai_available or not content.strip():
-        return (content[:400] + "...") if len(content) > 400 else (content or title)
+        return {"summary": fallback_summary, "category": None}
 
     try:
         resp = _openai_client.chat.completions.create(
@@ -319,28 +323,59 @@ def _generate_summary(title: str, content: str) -> str:
                 {
                     "role": "system",
                     "content": (
-                        "You are an elite tech journalist and AI news summarizer for a premium app. "
-                        "Write a concise but highly informative summary (3-4 sentences). "
-                        "Explain exactly what happened, what the product/model does, why it matters, and who it affects. "
-                        "For startups or product launches, clearly explain the core value proposition. "
-                        "NEVER use phrases like 'read more', 'for more details', or 'visit the link'. "
-                        "Make the summary feel completely self-contained so the user understands the news without clicking away. "
-                        "No fluff, no greetings, no markdown."
+                        "You are an elite tech journalist and AI news categorizer for a premium app. "
+                        "Return ONLY valid JSON with two keys: 'summary' and 'category'.\n\n"
+                        "SUMMARY: 3-4 sentences. Explain what happened, what the product/model does, "
+                        "why it matters, who it affects. Self-contained, no 'read more', no markdown, no fluff.\n\n"
+                        "CATEGORY: pick exactly ONE:\n"
+                        "- AI Models: the model/brain itself being released or benchmarked "
+                        "(GPT-5, Claude, Gemini, Llama, Mistral releases). The intelligence engine.\n"
+                        "- AI Tools: apps/products that USE models to solve tasks "
+                        "(ChatGPT app, Midjourney, Canva AI, video/image/music generators, writing assistants).\n"
+                        "- Open Source AI: open-weight or open-source models/code "
+                        "(Hugging Face releases, open weights, GitHub models, self-hostable).\n"
+                        "- Funding News: funding rounds, raises, acquisitions, valuations.\n"
+                        "- AI Startups: new startups, founders, stealth companies, early-stage.\n"
+                        "- Product Launches: non-model product launches or feature updates.\n"
+                        "- AI Research: arXiv papers, academic studies, new methods/techniques, benchmarks.\n"
+                        "- Big Tech AI: strategy/business news from OpenAI, Google, Meta, Microsoft, etc.\n"
+                        "- Latest: general news, opinion, coverage that doesn't fit above.\n\n"
+                        "KEY: A MODEL is the brain (GPT-5). A TOOL is the product using it (ChatGPT app). "
+                        "'OpenAI releases GPT-5' = AI Models. 'ChatGPT adds feature' = AI Tools. "
+                        "If a model is open-weight, prefer Open Source AI over AI Models.\n\n"
+                        "Format: {\"summary\": \"...\", \"category\": \"...\"}"
                     ),
                 },
                 {
                     "role": "user",
-                    "content": f"Summarize:\n\nTitle: {title}\n\nContent: {content[:3000]}",
+                    "content": f"Title: {title}\n\nContent: {content[:3000]}",
                 },
             ],
-            max_tokens=200,
-            temperature=0.4,
+            max_tokens=300,
+            temperature=0.3,
+            response_format={"type": "json_object"},
         )
-        summary = resp.choices[0].message.content.strip()
-        return _clean_summary_text(summary)
+        import json
+        data = json.loads(resp.choices[0].message.content.strip())
+        summary = _clean_summary_text(data.get("summary", "").strip())
+        category = data.get("category", "").strip()
+
+        valid_cats = {"AI Models", "AI Tools", "Open Source AI", "Funding News",
+                      "AI Startups", "Product Launches", "AI Research", "Big Tech AI", "Latest"}
+        if category not in valid_cats:
+            category = None
+        if not summary:
+            summary = fallback_summary
+
+        return {"summary": summary, "category": category}
     except Exception as e:
-        logger.warning(f"OpenAI summary failed: {e}")
-        return (content[:400] + "...") if len(content) > 400 else (content or title)
+        logger.warning(f"OpenAI summary+category failed: {e}")
+        return {"summary": fallback_summary, "category": None}
+
+
+def _generate_summary(title: str, content: str) -> str:
+    """Backward-compatible wrapper."""
+    return _generate_summary_and_category(title, content)["summary"]
 
 
 def _article_exists(article_url: str) -> bool:
@@ -623,7 +658,9 @@ def ingest_source(source: dict, seen_images: set, dry_run: bool = False) -> dict
             is_tutorial = any(kw in combined_text for kw in tutorial_keywords)
 
             # Predict category logic
-            summary = _generate_summary(title, content)
+            llm_result = _generate_summary_and_category(title, content)
+            summary = llm_result["summary"]
+            llm_category = llm_result["category"]
             strict_cat, conf_score, rejection_reasons = _detect_category_strict(title, summary)
             
             # Hybrid categorization: content-priority categories (funding, launches,
@@ -631,18 +668,19 @@ def ingest_source(source: dict, seen_images: set, dry_run: bool = False) -> dict
             # to the source's curated category_hint to avoid misclassification.
             hint = source.get("category_hint")
 
-            if strict_cat in CONTENT_PRIORITY_CATS and conf_score >= 4.0:
-                # Strong content signal wins (e.g. "raises $2B" -> Funding News)
+            # LLM category is primary (it understands model vs tool vs open-source)
+            if llm_category:
+                category = llm_category
+            # Fallback: keyword scoring for content categories
+            elif strict_cat in CONTENT_PRIORITY_CATS and conf_score >= 4.0:
                 category = strict_cat
+            # Fallback: source hint
             elif hint:
-                # Ambiguous content -> trust the source's known category
                 category = hint
             else:
-                # No hint available -> fall back to keyword result
                 category = strict_cat
 
-            # Confidence boost when keyword scoring and hint agree
-            if hint and hint == strict_cat:
+            if hint and hint == category:
                 conf_score += 1.0
             
             # Block tutorials from crowding the Latest feed
