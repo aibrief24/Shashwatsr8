@@ -96,6 +96,9 @@ CATEGORY_RULES = {
     }
 }
 
+# Content-driven categories: strong keyword signals override source hint
+CONTENT_PRIORITY_CATS = ["Funding News", "Product Launches", "AI Models", "AI Startups"]
+
 # Keywords that indicate an article is AI-related (used to filter non-AI content)
 AI_RELEVANCE_KEYWORDS = [
     "ai", "artificial intelligence", "machine learning", "deep learning",
@@ -623,14 +626,24 @@ def ingest_source(source: dict, seen_images: set, dry_run: bool = False) -> dict
             summary = _generate_summary(title, content)
             strict_cat, conf_score, rejection_reasons = _detect_category_strict(title, summary)
             
-            # The category must be earned on its own merits. 
-            # We no longer blind trust the source's category_hint.
-            category = strict_cat
-            
-            # Boost the score if it matches the source's hint, but don't force it
+            # Hybrid categorization: content-priority categories (funding, launches,
+            # models, startups) trust strong keyword signals. Everything else defaults
+            # to the source's curated category_hint to avoid misclassification.
             hint = source.get("category_hint")
-            if hint and hint == category:
-                 conf_score += 1.0
+
+            if strict_cat in CONTENT_PRIORITY_CATS and conf_score >= 4.0:
+                # Strong content signal wins (e.g. "raises $2B" -> Funding News)
+                category = strict_cat
+            elif hint:
+                # Ambiguous content -> trust the source's known category
+                category = hint
+            else:
+                # No hint available -> fall back to keyword result
+                category = strict_cat
+
+            # Confidence boost when keyword scoring and hint agree
+            if hint and hint == strict_cat:
+                conf_score += 1.0
             
             # Block tutorials from crowding the Latest feed
             if is_tutorial and category == "Latest":
