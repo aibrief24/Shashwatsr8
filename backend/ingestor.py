@@ -318,7 +318,7 @@ def _generate_summary_and_category(title: str, content: str) -> dict:
 
     try:
         resp = _openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",
             messages=[
                 {
                     "role": "system",
