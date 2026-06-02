@@ -386,6 +386,70 @@ def _article_exists(article_url: str) -> bool:
         return False
 
 
+# Tokens to exclude from story clustering (too generic for AI news)
+STORY_CLUSTER_STOPWORDS = {
+    "the", "a", "an", "and", "or", "but", "to", "for", "of", "in", "on", "at",
+    "is", "are", "was", "were", "has", "have", "had", "will", "be", "been",
+    "this", "that", "these", "those", "with", "from", "by", "as", "it", "its",
+    "new", "now", "just", "more", "how", "why", "what", "when", "where",
+    "ai", "artificial", "intelligence",
+}
+
+
+def _extract_story_tokens(title: str, summary: str = "") -> set:
+    """Extract meaningful tokens from title/summary for clustering."""
+    import re
+    text = (title + " " + summary[:200]).lower()
+    tokens = re.findall(r'\b[a-z][a-z0-9]{2,}\b', text)
+    return {t for t in tokens if t not in STORY_CLUSTER_STOPWORDS}
+
+
+def _is_clustered_duplicate(title: str, summary: str = "", hours: int = 6) -> bool:
+    """Check if similar story (different source) was ingested recently.
+    Catches cross-source pileups like Anthropic IPO covered by 6 publishers."""
+    try:
+        new_tokens = _extract_story_tokens(title, summary)
+        if len(new_tokens) < 3:
+            return False
+
+        rows = query(
+            """
+            SELECT title, summary FROM articles
+            WHERE created_at >= NOW() - INTERVAL '%s hours'
+            ORDER BY created_at DESC
+            LIMIT 50
+            """,
+            (hours,)
+        )
+
+        if not rows:
+            return False
+
+        for r in rows:
+            existing_tokens = _extract_story_tokens(
+                r.get("title", ""),
+                r.get("summary", "")
+            )
+            if len(existing_tokens) < 3:
+                continue
+
+            overlap = new_tokens & existing_tokens
+            union = new_tokens | existing_tokens
+            similarity = len(overlap) / len(union) if union else 0
+
+            if similarity >= 0.40 and len(overlap) >= 3:
+                logger.info(
+                    f"Skipped clustered story: '{title[:50]}...' "
+                    f"(similarity={similarity:.2f}, shared={len(overlap)})"
+                )
+                return True
+
+        return False
+    except Exception as e:
+        logger.warning(f"Story clustering check failed: {e}")
+        return False
+
+
 def _is_valid_image_url(url: str) -> bool:
     """Rigorous check to reject logos, favicons, avatars, generic placeholders, and SVGs."""
     if not url or not isinstance(url, str):
@@ -637,6 +701,11 @@ def ingest_source(source: dict, seen_images: set, dry_run: bool = False) -> dict
                 continue
 
             title = entry.get("title", "Untitled").strip()
+
+            # Cross-source story clustering check
+            # Catches different publishers covering the same story
+            if _is_clustered_duplicate(title):
+                continue
             content = entry.get("summary", "") or entry.get("description", "") or ""
 
             # Check AI Relevance and apply mixed-source strictness
