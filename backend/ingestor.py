@@ -844,15 +844,26 @@ def ingest_source(source: dict, seen_images: set, dry_run: bool = False) -> dict
                     MIN_CONFIDENCE = NOTIFICATION_CONFIG["MIN_CONFIDENCE_FOR_NOTIFY"]
                     is_breaking_val = False  # Static default on ingest
 
+                    # Freshness gate: don't notify on stale articles (e.g. Product Hunt's old published_at)
+                    article_age_hours = None
+                    try:
+                        if pub_dt is not None:
+                            article_age_hours = (datetime.now(timezone.utc) - pub_dt).total_seconds() / 3600
+                    except Exception as e:
+                        logger.warning(f"[PUSH-CHECK] age calc failed: {e}")
+                        article_age_hours = None
+                    is_fresh = article_age_hours is None or article_age_hours <= 24
+
                     logger.info(f"[PUSH-CHECK] id/title: {new_id} / {title[:40]}")
                     logger.info(
-                        f"[PUSH-CHECK] category={category} | relevance={relevance_score} | confidence={conf_score}"
+                        f"[PUSH-CHECK] category={category} | relevance={relevance_score} | confidence={conf_score} | age_hours={article_age_hours}"
                     )
 
                     should_notify = is_breaking_val or (
                         category in HIGH_SIGNAL_CATS
                         and relevance_score >= MIN_RELEVANCE
                         and conf_score >= MIN_CONFIDENCE
+                        and is_fresh
                     )
                     
                     if should_notify:
