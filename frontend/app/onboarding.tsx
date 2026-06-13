@@ -20,7 +20,7 @@ export default function OnboardingScreen() {
 
   const handleFinish = async () => {
     await completeOnboarding();
-    router.replace('/login');
+    router.replace('/(tabs)');
   };
 
   const handleNext = () => {

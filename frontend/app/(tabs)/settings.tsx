@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch, Linking, ScrollView, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, Linking, ScrollView, Platform, Alert, Share } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
@@ -16,7 +16,7 @@ export default function SettingsScreen() {
 
   const handleLogout = () => {
     logout();
-    router.replace('/login');
+    router.replace('/(tabs)');
   };
 
   const handleToggleNotifications = async (val: boolean) => {
@@ -49,9 +49,13 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleShareApp = () => {
-    if (Platform.OS === 'web') {
-      Linking.openURL(WEBSITE_URL);
+  const handleShareApp = async () => {
+    try {
+      await Share.share({
+        message: 'Check out AIBrief24 — AI news summarized in seconds:\nhttps://play.google.com/store/apps/details?id=com.aibrief24.app',
+      });
+    } catch (e) {
+      console.log('[SHARE-APP] error', e);
     }
   };
 
@@ -112,9 +116,9 @@ export default function SettingsScreen() {
       </View>
 
       {/* Logout */}
-      <TouchableOpacity testID="logout-btn" style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
+      <TouchableOpacity testID="logout-btn" style={styles.logoutBtn} onPress={token ? handleLogout : () => router.push('/login')} activeOpacity={0.8}>
         <LogOut size={18} color={Colors.accent} />
-        <Text style={styles.logoutText}>Sign Out</Text>
+        <Text style={styles.logoutText}>{token ? 'Sign Out' : 'Sign In'}</Text>
       </TouchableOpacity>
 
       {/* CTA */}

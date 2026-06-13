@@ -8,6 +8,7 @@ import { Colors } from '@/constants/theme';
 import { useRouter } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { api } from '@/services/api';
+import { requestAndRegisterPushToken } from '@/utils/notifications';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
@@ -26,7 +27,7 @@ function GlobalAuthObserver() {
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
-    if (loading || !token || !hasOnboarded) return;
+    if (loading || !hasOnboarded) return;
 
     const handleNotif = (response: any) => {
       if (
@@ -56,6 +57,12 @@ function GlobalAuthObserver() {
   }, [loading, token, hasOnboarded, router]);
 
   useEffect(() => {
+    if (Platform.OS === 'web') return;
+    if (loading || !hasOnboarded) return;
+    requestAndRegisterPushToken(token ?? undefined).catch(() => {});
+  }, [loading, hasOnboarded, token]);
+
+  useEffect(() => {
     if (loading) return;
 
     const PUBLIC_ROUTES = ['/privacy', '/terms', '/support', '/delete-account'];
@@ -73,8 +80,9 @@ function GlobalAuthObserver() {
 
     if (!token) {
       const currentSegment = segments[0] as string;
-      if (currentSegment !== 'login' && currentSegment !== 'signup' && currentSegment !== 'forgot-password' && currentSegment !== 'reset-password') {
-        router.replace('/login');
+      const browseAllowed = ['(tabs)', 'article', 'search', 'login', 'signup', 'forgot-password', 'reset-password', 'privacy'];
+      if (!browseAllowed.includes(currentSegment)) {
+        router.replace('/(tabs)');
       }
     } else {
       const allowedAuthRoutes = ['(tabs)', 'article', 'search', 'privacy', 'reset-password'];

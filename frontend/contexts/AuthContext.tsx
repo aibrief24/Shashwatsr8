@@ -283,7 +283,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const toggleBookmark = useCallback(async (article: any, isCurrentlyBookmarked: boolean) => {
-    if (!token) return;
+    if (!token) { router.push('/login'); return; }
 
     // Fallback for when ID is passed directly instead of the full object
     const articleId = typeof article === 'string' ? article : article.id;

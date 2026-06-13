@@ -122,8 +122,8 @@ async function request(path: string, options: RequestInit = {}, timeoutMs = 3000
   }
 }
 
-function authHeaders(token: string) {
-  return { Authorization: `Bearer ${token}` };
+function authHeaders(token?: string): Record<string, string> {
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 export const api = {
@@ -191,7 +191,7 @@ export const api = {
     }),
 
   // Push Notifications
-  registerPushToken: (pushToken: string, platform: string, authToken: string) =>
+  registerPushToken: (pushToken: string, platform: string, authToken?: string) =>
     request('/push/register', { method: 'POST', body: JSON.stringify({ token: pushToken, platform }), headers: authHeaders(authToken) }),
 
   // Settings

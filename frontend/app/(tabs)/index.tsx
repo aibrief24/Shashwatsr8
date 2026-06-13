@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   ScrollView,
   AppState,
+  Share,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -235,7 +236,7 @@ const SummaryBlock = React.memo(
     <View style={styles.summaryContainer}>
       <Text
         style={styles.articleSummary}
-        numberOfLines={expanded ? undefined : 4}
+        numberOfLines={expanded ? undefined : 7}
         ellipsizeMode="tail"
       >
         {summary}
@@ -321,10 +322,10 @@ const CTAButtons = React.memo(({ index }: { index: number }) => (
 
 const ImageBlock = React.memo(
   ({ article, index }: { article: Article; index: number }) => {
-    if (article.image_url) {
+    if (article.thumbnail_url || article.image_url) {
       return (
         <Image
-          source={{ uri: article.image_url }}
+          source={{ uri: article.thumbnail_url || article.image_url }}
           style={styles.image}
           contentFit="cover"
           transition={200}
@@ -480,7 +481,6 @@ const ArticleCard = React.memo(
               index={index}
               handleShare={handleShare}
             />
-            <CTAButtons index={index} />
           </View>
         </View>
       </View>
@@ -662,9 +662,7 @@ export default function HomeFeed() {
     console.log('[DEBUG-PUSH] notification CTA pressed');
     setRegisteringPush(true);
     try {
-      if (token) {
-        await requestAndRegisterPushToken(token);
-      }
+      await requestAndRegisterPushToken(token ?? undefined);
     } catch (e) {
       console.log('[DEBUG-PUSH] error', e);
     } finally {
@@ -674,8 +672,15 @@ export default function HomeFeed() {
     }
   };
 
-  const handleShare = useCallback(async (_article: Article) => {
-    // keep your existing share logic here
+  const handleShare = useCallback(async (article: Article) => {
+    try {
+      await Share.share({
+        message: `${article.title}\n\nRead more:\n${article.article_url}`,
+        title: article.title,
+      });
+    } catch (e) {
+      console.log('[SHARE] error', e);
+    }
   }, []);
 
   const onViewableItemsChanged = useCallback(
