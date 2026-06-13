@@ -425,16 +425,119 @@ def get_breaking():
     return {"articles": _serialize_list(rows or [])}
 
 
+SEARCH_SYNONYMS = {
+    "devops": ["docker", "kubernetes", "k8s", "ci/cd", "cicd", "deployment", "pipeline", "terraform", "ansible", "jenkins", "containerization", "infrastructure"],
+    "computer vision": ["image recognition", "object detection", "image classification", "cv", "opencv", "yolo", "segmentation", "ocr"],
+    "cv": ["computer vision", "image recognition", "object detection"],
+    "llm": ["large language model", "language model", "gpt", "chatbot", "transformer", "foundation model"],
+    "llms": ["large language model", "language model", "gpt", "transformer", "foundation model"],
+    "aws": ["amazon web services", "cloud", "ec2", "s3", "lambda", "bedrock", "sagemaker"],
+    "cloud": ["aws", "azure", "gcp", "google cloud", "ec2", "kubernetes"],
+    "ml": ["machine learning", "deep learning", "neural network", "model training", "training"],
+    "machine learning": ["ml", "deep learning", "neural network", "model training"],
+    "nlp": ["natural language processing", "language model", "text", "llm", "transformer"],
+    "rag": ["retrieval augmented generation", "retrieval-augmented", "vector database", "embeddings", "semantic search"],
+    "agent": ["agentic", "autonomous", "ai agent", "tool use", "agents"],
+    "agents": ["agentic", "autonomous", "ai agent", "tool use", "agent"],
+    "image generation": ["text-to-image", "diffusion", "stable diffusion", "midjourney", "dall-e", "dalle", "flux"],
+    "video generation": ["text-to-video", "video model", "sora", "veo", "runway", "kling"],
+    "open source": ["open-source", "opensource", "open weights", "open-weight", "llama", "mistral", "gemma", "qwen"],
+    "fine-tuning": ["fine tuning", "finetuning", "lora", "training", "rlhf", "instruction tuning"],
+    "robotics": ["robot", "humanoid", "embodied", "automation"],
+    "chip": ["semiconductor", "gpu", "tpu", "nvidia", "silicon", "processor", "accelerator"],
+    "gpu": ["nvidia", "chip", "accelerator", "cuda", "tpu"],
+    "startup": ["funding", "venture", "vc", "raised", "seed", "series a", "valuation"],
+    "regulation": ["policy", "law", "governance", "eu ai act", "compliance", "safety"],
+    "coding": ["code", "programming", "developer", "software", "copilot", "code generation"],
+}
+
+
+def _expand_query_terms(q: str) -> list:
+    """Turn a raw query into a list of term-groups. Each group is an OR-set
+    (word + synonyms); groups are ANDed. Multi-word synonym keys (e.g.
+    'computer vision') are matched against the whole query first."""
+    ql = q.strip().lower()
+    if not ql:
+        return []
+
+    groups = []
+    consumed = ql
+
+    # 1) Multi-word synonym keys matched against the full query first.
+    for key, syns in SEARCH_SYNONYMS.items():
+        if " " in key and key in consumed:
+            groups.append([key] + syns)
+            consumed = consumed.replace(key, " ")
+
+    # 2) Remaining single words → each its own group, expanded by synonyms.
+    for word in consumed.split():
+        word = word.strip()
+        if not word or len(word) < 2:
+            continue
+        group = [word]
+        if word in SEARCH_SYNONYMS:
+            group += SEARCH_SYNONYMS[word]
+        groups.append(group)
+
+    # De-dup terms within each group, preserving order.
+    cleaned = []
+    for g in groups:
+        seen = set()
+        deduped = []
+        for t in g:
+            if t not in seen:
+                seen.add(t)
+                deduped.append(t)
+        cleaned.append(deduped)
+    return cleaned
+
+
 @api_router.get("/articles/search")
 def search_articles(q: str = "", limit: int = 20):
-    if not q:
+    if not q or not q.strip():
         return {"articles": [], "total": 0}
-    pattern = f"%{q}%"
-    rows = query(
-        "SELECT * FROM articles WHERE status = 'published' AND (title ILIKE %s OR summary ILIKE %s OR source_name ILIKE %s OR category ILIKE %s) ORDER BY published_at DESC LIMIT %s",
-        (pattern, pattern, pattern, pattern, limit)
+
+    term_groups = _expand_query_terms(q)
+    if not term_groups:
+        return {"articles": [], "total": 0}
+
+    # AND across concept groups, OR within a group (across title+summary).
+    where_parts = []
+    params = []
+    for group in term_groups:
+        ors = []
+        for term in group:
+            pat = f"%{term}%"
+            ors.append("(title ILIKE %s OR summary ILIKE %s)")
+            params.extend([pat, pat])
+        where_parts.append("(" + " OR ".join(ors) + ")")
+    where_clause = " AND ".join(where_parts)
+
+    full_phrase = f"%{q.strip()}%"
+    first_word = f"%{term_groups[0][0]}%"
+    rank_sql = (
+        "(CASE WHEN title ILIKE %s THEN 3 ELSE 0 END"
+        " + CASE WHEN title ILIKE %s THEN 2 ELSE 0 END"
+        " + CASE WHEN summary ILIKE %s THEN 1 ELSE 0 END) AS _rank"
     )
-    return {"articles": _serialize_list(rows or []), "total": len(rows or [])}
+    rank_params = [full_phrase, first_word, full_phrase]
+
+    sql = (
+        "SELECT *, " + rank_sql +
+        " FROM articles"
+        " WHERE status = 'published' AND (" + where_clause + ")"
+        " ORDER BY _rank DESC, COALESCE(published_at, created_at) DESC"
+        " LIMIT %s"
+    )
+    final_params = tuple(rank_params + params + [limit])
+
+    rows = query(sql, final_params) or []
+
+    for r in rows:
+        if isinstance(r, dict):
+            r.pop("_rank", None)
+
+    return {"articles": _serialize_list(rows), "total": len(rows)}
 
 
 @api_router.get("/articles/{article_id}")
