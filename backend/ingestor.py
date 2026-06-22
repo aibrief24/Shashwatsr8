@@ -852,7 +852,7 @@ def ingest_source(source: dict, seen_images: set, dry_run: bool = False) -> dict
                     except Exception as e:
                         logger.warning(f"[PUSH-CHECK] age calc failed: {e}")
                         article_age_hours = None
-                    is_fresh = article_age_hours is None or article_age_hours <= 24
+                    is_fresh = article_age_hours is not None and article_age_hours <= 6
 
                     logger.info(f"[PUSH-CHECK] id/title: {new_id} / {title[:40]}")
                     logger.info(
