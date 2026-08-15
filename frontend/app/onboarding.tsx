@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Colors, FontSize, Radius } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Zap, Image as ImageIcon, Bookmark, Bell } from 'lucide-react-native';
+import CategoryPicker from '@/components/CategoryPicker';
 
 const slides = [
   { icon: Zap, title: 'AI News, Lightning Fast', desc: 'Get the latest AI updates in bite-sized summaries you can read in 60 seconds. Swipe through news like never before.', color: Colors.primary },
@@ -12,6 +13,10 @@ const slides = [
   { icon: Bookmark, title: 'Bookmark & Share', desc: 'Save articles for later reading and share the most interesting AI news with your network instantly.', color: Colors.success },
   { icon: Bell, title: 'Never Miss an Update', desc: 'Enable push notifications to get alerted the moment breaking AI news drops. Stay ahead of the curve.', color: Colors.accent },
 ];
+
+// The interest picker is the final onboarding step (index === slides.length).
+const PICKER_STEP = slides.length;
+const TOTAL_STEPS = slides.length + 1;
 
 export default function OnboardingScreen() {
   const [page, setPage] = useState(0);
@@ -24,12 +29,44 @@ export default function OnboardingScreen() {
   };
 
   const handleNext = () => {
-    if (page < slides.length - 1) {
-      setPage(page + 1);
-    } else {
-      handleFinish();
-    }
+    // The last slide advances to the picker; the picker finishes onboarding itself.
+    if (page < PICKER_STEP) setPage(page + 1);
   };
+
+  // "Skip" skips the intro slides, not the interest picker — a selection is
+  // required before the feed can be personalized.
+  const handleSkipSlides = () => setPage(PICKER_STEP);
+
+  const isPickerStep = page === PICKER_STEP;
+
+  const renderDots = () => (
+    <View style={styles.dots}>
+      {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+        <View key={i} style={[styles.dot, page === i && styles.dotActive]} />
+      ))}
+    </View>
+  );
+
+  if (isPickerStep) {
+    return (
+      <View testID="onboarding-screen" style={styles.container}>
+        <SafeAreaView style={styles.headerArea}>
+          <View style={styles.headerRow}>
+            <View style={styles.spacer} />
+          </View>
+        </SafeAreaView>
+
+        <View style={styles.pickerArea}>
+          <CategoryPicker
+            confirmLabel="Get Started"
+            onConfirm={handleFinish}
+          />
+        </View>
+
+        <View style={styles.pickerDots}>{renderDots()}</View>
+      </View>
+    );
+  }
 
   const currentSlide = slides[page];
   const Icon = currentSlide.icon;
@@ -40,7 +77,7 @@ export default function OnboardingScreen() {
       <SafeAreaView style={styles.headerArea}>
         <View style={styles.headerRow}>
           <View style={styles.spacer} />
-          <TouchableOpacity testID="skip-btn" style={styles.skipBtn} onPress={handleFinish}>
+          <TouchableOpacity testID="skip-btn" style={styles.skipBtn} onPress={handleSkipSlides}>
             <Text style={styles.skipText}>Skip</Text>
           </TouchableOpacity>
         </View>
@@ -60,14 +97,10 @@ export default function OnboardingScreen() {
 
       {/* Bottom */}
       <View style={styles.bottomSection}>
-        <View style={styles.dots}>
-          {slides.map((_, i) => (
-            <View key={i} style={[styles.dot, page === i && styles.dotActive]} />
-          ))}
-        </View>
+        {renderDots()}
         <TouchableOpacity testID="onboarding-next-btn" onPress={handleNext} activeOpacity={0.8}>
           <LinearGradient colors={[Colors.primary, Colors.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.nextBtnGrad}>
-            <Text style={styles.nextBtnText}>{page === slides.length - 1 ? 'Get Started' : 'Next'}</Text>
+            <Text style={styles.nextBtnText}>{page === slides.length - 1 ? 'Choose Interests' : 'Next'}</Text>
           </LinearGradient>
         </TouchableOpacity>
       </View>
@@ -83,6 +116,9 @@ const styles = StyleSheet.create({
   skipBtn: { paddingVertical: 8, paddingHorizontal: 4 },
   skipText: { color: Colors.textSecondary, fontSize: FontSize.base },
   slideArea: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+  pickerArea: { flex: 1 },
+  // `dots` already carries marginBottom: 32, which doubles as the bottom inset here.
+  pickerDots: { alignItems: 'center' },
   iconWrapOuter: {
     width: 140, height: 140, borderRadius: 70,
     justifyContent: 'center', alignItems: 'center', marginBottom: 40,

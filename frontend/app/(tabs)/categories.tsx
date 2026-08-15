@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Platform, ScrollView, ActivityIndicator } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Platform, ScrollView, ActivityIndicator, Animated, Easing } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,6 +26,32 @@ const CATEGORY_COLORS = [
 ];
 
 interface CategoryItem { name: string; count: number; }
+
+function CategorySkeleton() {
+  const shimmer = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [shimmer]);
+  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.7] });
+  return (
+    <View style={styles.grid}>
+      {Array.from({ length: 8 }).map((_, i) => (
+        <View key={`skel-${i}`} style={styles.gridItem}>
+          <Animated.View style={[styles.skelIcon, { opacity }]} />
+          <Animated.View style={[styles.skelLineWide, { opacity }]} />
+          <Animated.View style={[styles.skelLineNarrow, { opacity }]} />
+        </View>
+      ))}
+    </View>
+  );
+}
 
 export default function CategoriesScreen() {
   const [categories, setCategories] = useState<CategoryItem[]>([]);
@@ -126,6 +152,9 @@ export default function CategoriesScreen() {
     <ScrollView testID="categories-screen" style={[styles.container, { paddingTop: insets.top }]} contentContainerStyle={{ paddingBottom: 120 }}>
       <Text style={styles.pageTitle}>Explore Categories</Text>
       <Text style={styles.pageSubtitle}>Discover AI news by topic</Text>
+      {loading ? (
+        <CategorySkeleton />
+      ) : (
       <View style={styles.grid}>
         {categories.map((cat, i) => {
           const Icon = CATEGORY_ICONS[cat.name] || Zap;
@@ -141,6 +170,7 @@ export default function CategoriesScreen() {
           );
         })}
       </View>
+      )}
     </ScrollView>
   );
 }
@@ -156,6 +186,9 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 15, elevation: 5
   },
   gridIcon: { width: 56, height: 56, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  skelIcon: { width: 56, height: 56, borderRadius: 18, marginBottom: 16, backgroundColor: 'rgba(255,255,255,0.12)' },
+  skelLineWide: { width: '70%', height: 16, borderRadius: 6, marginBottom: 8, backgroundColor: 'rgba(255,255,255,0.12)' },
+  skelLineNarrow: { width: '45%', height: 13, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.10)' },
   gridName: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary, marginBottom: 4, letterSpacing: -0.3 },
   gridCount: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' },
   catHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, gap: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },

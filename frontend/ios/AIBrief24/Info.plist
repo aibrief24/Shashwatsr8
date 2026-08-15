@@ -35,13 +35,15 @@
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>GADApplicationIdentifier</key>
-    <string>ca-app-pub-6497331440034971~8131854655</string>
+    <string>ca-app-pub-6497331440034971~1117847954</string>
     <key>GADDelayAppMeasurementInit</key>
     <false/>
     <key>LSMinimumSystemVersion</key>
     <string>12.0</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
     <key>NSAppTransportSecurity</key>
     <dict>
       <key>NSAllowsArbitraryLoads</key>
@@ -51,6 +53,12 @@
     </dict>
     <key>NSCameraUsageDescription</key>
     <string>Take photos to share with articles</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Allow access to save and share article images.</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Allow saving article images to your photo library.</string>
+    <key>NSUserTrackingUsageDescription</key>
+    <string>AIBrief24 uses this to show ads relevant to your interests, such as technology and AI products, and to measure ad performance. This helps keep the app free.</string>
     <key>NSUserActivityTypes</key>
     <array>
       <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>

@@ -15,6 +15,8 @@ import * as Notifications from 'expo-notifications';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { useSegments, usePathname } from 'expo-router';
 import mobileAds from 'react-native-google-mobile-ads';
+import { Settings as FBSettings } from 'react-native-fbsdk-next';
+import { requestTrackingPermissionsAsync } from 'expo-tracking-transparency';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 function GlobalAuthObserver() {
@@ -158,17 +160,40 @@ export default function RootLayout() {
   useEffect(() => {
     if (Platform.OS !== 'android' && Platform.OS !== 'ios') return;
 
-    console.log('[AdMob] Starting initialization...');
-    mobileAds()
-      .initialize()
-      .then(() => {
-        console.log('[AdMob] Initialization succeeded — ads enabled.');
-        setAdsEnabled(true);
-      })
-      .catch((e: unknown) => {
-        console.warn('[AdMob] Initialization failed — ads disabled. App continues normally.', e);
-        // adsEnabled stays false — no ad components will be rendered
-      });
+    // iOS: request App Tracking Transparency before ads (Apple requirement)
+    const initAds = async () => {
+      if (Platform.OS === 'ios') {
+        try {
+          await requestTrackingPermissionsAsync();
+        } catch (e) {
+          console.log('[ATT] request failed', e);
+        }
+      }
+
+      console.log('[AdMob] Starting initialization...');
+      mobileAds()
+        .initialize()
+        .then(() => {
+          console.log('[AdMob] Initialization succeeded — ads enabled.');
+          setAdsEnabled(true);
+        })
+        .catch((e: unknown) => {
+          console.warn('[AdMob] Initialization failed — ads disabled. App continues normally.', e);
+          // adsEnabled stays false — no ad components will be rendered
+        });
+
+      // ── Meta (Facebook) SDK init for install/event tracking ──────────────
+      try {
+        FBSettings.initializeSDK();
+        if (Platform.OS === 'android') {
+          FBSettings.setAdvertiserTrackingEnabled(true);
+        }
+        console.log('[FBSDK] Initialized.');
+      } catch (e) {
+        console.warn('[FBSDK] init failed', e);
+      }
+    };
+    initAds();
   }, []);
   // ─────────────────────────────────────────────────────────────────────────
 

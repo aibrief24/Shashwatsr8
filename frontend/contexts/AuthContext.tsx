@@ -21,6 +21,7 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, name: string) => Promise<{ needsConfirmation?: boolean }>;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   completeOnboarding: () => Promise<void>;
   toggleBookmark: (article: any, isCurrentlyBookmarked: boolean) => Promise<void>;
@@ -273,6 +274,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearStoredAuth().catch(() => { });
   };
 
+  // Permanent account deletion (App Store guideline 5.1.1(v)).
+  // Same teardown as forceLogout, minus the "Session Expired" alert — the user
+  // asked for this, so it is not an error state. `has_onboarded` is deliberately
+  // preserved: onboarding is a device preference, not account data.
+  const deleteAccount = async () => {
+    if (!token) throw new Error('You are not signed in.');
+
+    await api.deleteAccount(token);
+
+    setUser(null);
+    setToken(null);
+    setBookmarkIds([]);
+    setBookmarkedArticlesCache([]);
+
+    try {
+      await AsyncStorage.multiRemove(['auth_token', 'auth_refresh_token']);
+    } catch (e) {
+      console.error('[DELETE-ACCOUNT] Failed to clear stored auth:', e);
+    }
+  };
+
   const forgotPassword = async (email: string) => {
     await api.forgotPassword(email);
   };
@@ -352,7 +374,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [token, forceLogout]);
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, hasOnboarded, bookmarkIds, bookmarkedArticlesCache, setBookmarkedArticlesCache, feedArticlesCache, setFeedArticlesCache, login, signup, logout, forgotPassword, completeOnboarding, toggleBookmark, isBookmarked, refreshBookmarks }}>
+    <AuthContext.Provider value={{ user, token, loading, hasOnboarded, bookmarkIds, bookmarkedArticlesCache, setBookmarkedArticlesCache, feedArticlesCache, setFeedArticlesCache, login, signup, logout, deleteAccount, forgotPassword, completeOnboarding, toggleBookmark, isBookmarked, refreshBookmarks }}>
       {children}
     </AuthContext.Provider>
   );

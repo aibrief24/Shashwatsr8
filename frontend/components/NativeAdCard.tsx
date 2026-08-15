@@ -33,7 +33,9 @@ const USE_TEST_ADS = process.env.EXPO_PUBLIC_USE_TEST_ADS !== 'false';
 // Official Google test native ad unit IDs (from react-native-google-mobile-ads TestIds)
 const GOOGLE_TEST_NATIVE_ANDROID = 'ca-app-pub-3940256099942544/2247696110';
 const GOOGLE_TEST_NATIVE_IOS = 'ca-app-pub-3940256099942544/3986624511';
-const REAL_NATIVE_AD_UNIT_ID = 'ca-app-pub-6497331440034971/1975616205';
+const REAL_NATIVE_AD_UNIT_ID = Platform.OS === 'ios'
+    ? 'ca-app-pub-6497331440034971/2944834861'   // iOS native ad unit
+    : 'ca-app-pub-6497331440034971/1975616205';  // Android native ad unit
 
 function getAdUnitId(): string {
     if (USE_TEST_ADS) {

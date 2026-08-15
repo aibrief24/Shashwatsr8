@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Platform, Keyboard } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Platform, Keyboard, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -130,7 +130,12 @@ export default function SearchScreen() {
       )}
 
       {/* Results */}
-      {searched && (
+      {searched && loading && results.length === 0 && (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60 }}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      )}
+      {searched && !(loading && results.length === 0) && (
         <FlatList
           data={results}
           keyExtractor={item => item.id}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Image as RNImage } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { Colors, FontSize, Radius } from '@/constants/theme';
@@ -54,8 +54,7 @@ export default function SignupScreen() {
           <View testID="signup-screen" style={styles.content}>
             <View style={styles.header}>
               <View style={styles.logoBadge}>
-                <LinearGradient colors={[Colors.primary, Colors.secondary]} style={StyleSheet.absoluteFillObject} />
-                <Text style={styles.logoText}>AI</Text>
+                <RNImage source={require('@/assets/images/icon.png')} style={styles.logoImage} resizeMode="contain" />
               </View>
               <Text style={styles.title}>Create Account</Text>
               <Text style={styles.subtitle}>Join AIBrief24 for daily AI news</Text>
@@ -105,6 +104,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 32, paddingVertical: 40 },
   header: { alignItems: 'center', marginBottom: 40 },
   logoBadge: { width: 72, height: 72, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginBottom: 24, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10, overflow: 'hidden' },
+  logoImage: { width: '100%', height: '100%' },
   logoText: { fontSize: 26, fontWeight: '900', color: '#fff', letterSpacing: 1 },
   title: { fontSize: 28, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5, marginBottom: 8 },
   subtitle: { fontSize: 15, color: Colors.textSecondary },

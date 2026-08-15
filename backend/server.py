@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Request, BackgroundTasks
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 import os
@@ -12,7 +13,7 @@ from datetime import datetime, timezone
 from auth import (
     supabase_signup, supabase_login, supabase_get_user,
     supabase_refresh_token, supabase_reset_password, supabase_logout,
-    get_current_user,
+    supabase_delete_user, get_current_user,
 )
 from database import query, execute, insert_returning, health_check_db
 from notifier import send_expo_notifications
@@ -322,6 +323,61 @@ def exchange_code(req: ExchangeCodeRequest):
     logger.info(f"[/auth/exchange-code] Request received. Code present: {bool(req.code)}")
     from auth import supabase_exchange_code
     return supabase_exchange_code(req.code)
+
+
+@api_router.delete("/auth/account")
+def delete_account(request: Request):
+    """Permanently delete the caller's account and all data linked to it.
+
+    Required by App Store guideline 5.1.1(v). Local data is removed first on a
+    best-effort basis; the Supabase Auth user is deleted last because that step
+    is the one that must succeed — if it fails we report failure, since the
+    account would otherwise still be usable for login.
+    """
+    payload = get_current_user(request)
+    uid = payload["sub"]
+    if not uid:
+        raise HTTPException(401, "Missing auth token")
+
+    logger.info(f"[/auth/account] Delete requested for user {uid}")
+
+    # (a) bookmarks
+    try:
+        execute("DELETE FROM bookmarks WHERE user_id = %s", (uid,))
+    except Exception as e:
+        logger.warning(f"[/auth/account] bookmarks delete failed (non-blocking): {e}")
+
+    # (b) push tokens — stops all future notifications to this user's devices
+    try:
+        execute("DELETE FROM push_tokens WHERE user_id = %s", (uid,))
+    except Exception as e:
+        logger.warning(f"[/auth/account] push_tokens delete failed (non-blocking): {e}")
+
+    # (c) profile mirror row
+    try:
+        execute("DELETE FROM users WHERE id = %s", (uid,))
+    except Exception as e:
+        logger.warning(f"[/auth/account] users delete failed (non-blocking): {e}")
+
+    # (d) Supabase Auth user — must succeed
+    try:
+        supabase_delete_user(uid)
+    except HTTPException as e:
+        logger.error(f"[/auth/account] auth user delete failed for {uid}: {e.detail}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "message": str(e.detail), "detail": str(e.detail)},
+        )
+    except Exception as e:
+        logger.error(f"[/auth/account] auth user delete errored for {uid}: {e}")
+        msg = f"Failed to delete account: {e}"
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "message": msg, "detail": msg},
+        )
+
+    logger.info(f"[/auth/account] Account {uid} fully deleted")
+    return {"success": True, "message": "Account deleted"}
 
 
 @api_router.post("/auth/logout")

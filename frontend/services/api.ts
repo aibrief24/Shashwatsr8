@@ -140,6 +140,9 @@ export const api = {
   logout: (token: string) =>
     request('/auth/logout', { method: 'POST', headers: authHeaders(token) }),
 
+  deleteAccount: (token: string) =>
+    request('/auth/account', { method: 'DELETE', headers: authHeaders(token) }),
+
   refreshToken: (refreshToken: string) =>
     request('/auth/refresh', { method: 'POST', body: JSON.stringify({ refresh_token: refreshToken }) }),
 

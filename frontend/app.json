@@ -13,13 +13,16 @@
       "bundleIdentifier": "com.aibrief24.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Take photos to share with articles",
+        "NSPhotoLibraryUsageDescription": "Allow access to save and share article images.",
+        "NSPhotoLibraryAddUsageDescription": "Allow saving article images to your photo library.",
+        "NSUserTrackingUsageDescription": "This identifier will be used to deliver personalized ads to you.",
         "UIBackgroundModes": [
           "remote-notification"
         ]
       }
     },
     "android": {
-      "versionCode": 10,
+      "versionCode": 15,
       "package": "com.aibrief24.app",
       "googleServicesFile": "./google-services.json",
       "permissions": [
@@ -41,7 +44,7 @@
         "react-native-google-mobile-ads",
         {
           "androidAppId": "ca-app-pub-6497331440034971~8131854655",
-          "iosAppId": "ca-app-pub-6497331440034971~8131854655"
+          "iosAppId": "ca-app-pub-6497331440034971~1117847954"
         }
       ],
       [
@@ -59,7 +62,20 @@
           "icon": "./assets/images/icon.png",
           "color": "#3B82F6"
         }
-      ]
+      ],
+      [
+        "react-native-fbsdk-next",
+        {
+          "appID": "1308022248155682",
+          "clientToken": "17301dbe6eaa25a3899b1832c7d7e40e",
+          "displayName": "AIBrief24",
+          "scheme": "fb1308022248155682",
+          "autoLogAppEventsEnabled": true,
+          "advertiserIDCollectionEnabled": true,
+          "isAutoInitEnabled": true
+        }
+      ],
+      "expo-tracking-transparency"
     ],
     "experiments": {
       "typedRoutes": true

@@ -1,18 +1,34 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch, Linking, ScrollView, Platform, Alert, Share } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, Linking, ScrollView, Platform, Alert, Share, Modal } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { Colors, FontSize, Radius, Spacing, TELEGRAM_URL, WEBSITE_URL } from '@/constants/theme';
-import { Bell, Send, Globe, Share2, Shield, Info, LogOut, ChevronRight, ExternalLink } from 'lucide-react-native';
+import { Bell, Send, Globe, Share2, Shield, Info, LogOut, ChevronRight, ExternalLink, Sparkles, Trash2, X } from 'lucide-react-native';
 import { requestAndRegisterPushToken } from '@/utils/notifications';
+import CategoryPicker, { loadPreferredCategories } from '@/components/CategoryPicker';
 
 export default function SettingsScreen() {
   const [notifEnabled, setNotifEnabled] = useState(true);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [interests, setInterests] = useState<string[]>([]);
+  const [showInterests, setShowInterests] = useState(false);
   const { user, token, logout } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+
+  // Reload on focus so the row's count stays in sync with onboarding edits.
+  useFocusEffect(
+    useCallback(() => {
+      loadPreferredCategories().then(setInterests);
+    }, [])
+  );
+
+  const handleInterestsSaved = (selected: string[]) => {
+    setInterests(selected);
+    setShowInterests(false);
+    Alert.alert('Interests Updated', 'Your feed will prioritise these topics.');
+  };
 
   const handleLogout = () => {
     logout();
@@ -59,19 +75,20 @@ export default function SettingsScreen() {
     }
   };
 
-  const SettingRow = ({ icon: Icon, label, value, onPress, color = Colors.textPrimary, rightElement }: any) => (
+  const SettingRow = ({ icon: Icon, label, value, onPress, color = Colors.textPrimary, rightElement, labelColor }: any) => (
     <TouchableOpacity testID={`setting-${label.toLowerCase().replace(/\s/g, '-')}`} style={styles.row} onPress={onPress} activeOpacity={onPress ? 0.7 : 1} disabled={!onPress}>
       <View style={styles.rowLeft}>
         <View style={[styles.rowIcon, { backgroundColor: (color || Colors.primary) + '15' }]}>
           <Icon size={18} color={color || Colors.primary} strokeWidth={1.5} />
         </View>
-        <Text style={styles.rowLabel}>{label}</Text>
+        <Text style={[styles.rowLabel, labelColor ? { color: labelColor } : null]}>{label}</Text>
       </View>
       {rightElement || (value ? <Text style={styles.rowValue}>{value}</Text> : <ChevronRight size={18} color={Colors.textTertiary} />)}
     </TouchableOpacity>
   );
 
   return (
+    <>
     <ScrollView testID="settings-screen" style={[styles.container, { paddingTop: insets.top }]} contentContainerStyle={styles.scrollContent}>
       <Text style={styles.pageTitle}>Settings</Text>
 
@@ -97,6 +114,18 @@ export default function SettingsScreen() {
         />
       </View>
 
+      {/* Personalization */}
+      <Text style={styles.sectionTitle}>Personalization</Text>
+      <View style={styles.section}>
+        <SettingRow
+          icon={Sparkles}
+          label="Edit Interests"
+          color={Colors.secondary}
+          value={interests.length > 0 ? `${interests.length} topics` : 'Not set'}
+          onPress={() => setShowInterests(true)}
+        />
+      </View>
+
       {/* Connect */}
       <Text style={styles.sectionTitle}>Connect</Text>
       <View style={styles.section}>
@@ -114,6 +143,22 @@ export default function SettingsScreen() {
         <View style={styles.divider} />
         <SettingRow icon={Shield} label="Privacy Policy" color={Colors.textTertiary} onPress={() => router.push('/privacy' as any)} />
       </View>
+
+      {/* Account — deletion entry point (App Store guideline 5.1.1(v)) */}
+      {token && (
+        <>
+          <Text style={styles.sectionTitle}>Account</Text>
+          <View style={styles.section}>
+            <SettingRow
+              icon={Trash2}
+              label="Delete Account"
+              color={Colors.error}
+              labelColor={Colors.error}
+              onPress={() => router.push('/delete-account' as any)}
+            />
+          </View>
+        </>
+      )}
 
       {/* Logout */}
       <TouchableOpacity testID="logout-btn" style={styles.logoutBtn} onPress={token ? handleLogout : () => router.push('/login')} activeOpacity={0.8}>
@@ -139,6 +184,34 @@ export default function SettingsScreen() {
 
       <Text style={styles.footer}>AIBrief24 — AI News in 60 Seconds</Text>
     </ScrollView>
+
+    <Modal
+      visible={showInterests}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      onRequestClose={() => setShowInterests(false)}
+    >
+      <View style={[styles.modalRoot, { paddingTop: insets.top }]}>
+        <View style={styles.modalHeader}>
+          <TouchableOpacity
+            testID="close-interests-btn"
+            style={styles.modalCloseBtn}
+            onPress={() => setShowInterests(false)}
+          >
+            <X size={24} color={Colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={styles.modalTitle}>Your Interests</Text>
+        </View>
+        <CategoryPicker
+          initialSelected={interests}
+          title="What do you care about?"
+          subtitle="Pick at least 3 topics. These are prioritised at the top of your feed."
+          confirmLabel="Save Interests"
+          onConfirm={handleInterestsSaved}
+        />
+      </View>
+    </Modal>
+    </>
   );
 }
 
@@ -168,4 +241,8 @@ const styles = StyleSheet.create({
   ctaBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12 },
   ctaBtnText: { fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
   footer: { textAlign: 'center', fontSize: 12, color: Colors.textTertiary, marginTop: 16, fontWeight: '600', letterSpacing: 0.5 },
+  modalRoot: { flex: 1, backgroundColor: Colors.background },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
+  modalCloseBtn: { marginRight: 16, padding: 4 },
+  modalTitle: { fontSize: 20, fontWeight: '700', color: Colors.textPrimary },
 });

@@ -16,10 +16,14 @@ import {
   ScrollView,
   AppState,
   Share,
+  Modal,
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { requestAndRegisterPushToken } from '@/utils/notifications';
+import ViewShot, { captureRef } from 'react-native-view-shot';
+import RNShare from 'react-native-share';
+import ShareCard from '@/components/ShareCard';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -43,8 +47,10 @@ import {
   Globe,
   Zap,
   Clock,
+  Sparkles,
 } from 'lucide-react-native';
 import { NativeAdCard } from '@/components/NativeAdCard';
+import { loadPreferredCategories } from '@/components/CategoryPicker';
 
 interface Article {
   id: string;
@@ -79,6 +85,42 @@ function timeAgo(dateStr: string): string {
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   return `${Math.floor(diff / 86400)}d ago`;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function articleTime(a: Article): number {
+  return new Date(a.published_at || a.created_at || 0).getTime();
+}
+
+/**
+ * Feed ordering.
+ *
+ * With no saved interests this is exactly the previous behaviour: published_at DESC.
+ *
+ * With interests, articles in a preferred category are lifted above the rest
+ * *within the same day only* — so personalization never pushes stale news above
+ * fresh news, and published_at DESC still holds inside each group. Purely
+ * client-side: the API call, pagination, and dedupe are untouched.
+ */
+function rankArticles(arr: Article[], preferred: string[]): Article[] {
+  const preferredSet = new Set(preferred);
+  return [...arr].sort((a, b) => {
+    const timeA = articleTime(a);
+    const timeB = articleTime(b);
+
+    if (preferredSet.size > 0) {
+      const dayA = Math.floor(timeA / DAY_MS);
+      const dayB = Math.floor(timeB / DAY_MS);
+      if (dayA !== dayB) return dayB - dayA;
+
+      const prefA = preferredSet.has(a.category) ? 1 : 0;
+      const prefB = preferredSet.has(b.category) ? 1 : 0;
+      if (prefA !== prefB) return prefB - prefA;
+    }
+
+    return timeB - timeA;
+  });
 }
 
 
@@ -498,12 +540,21 @@ export default function HomeFeed() {
   const [showPushCta, setShowPushCta] = useState(false);
   const [registeringPush, setRegisteringPush] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [preferredCategories, setPreferredCategories] = useState<string[]>([]);
+  // Mirrored in a ref because refreshArticles/loadMore are also invoked from
+  // long-lived listeners (AppState) that captured an earlier render's closure.
+  const preferredRef = useRef<string[]>([]);
   const lastRefreshTime = useRef<number>(Date.now());
   const { token } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const flatListRef = useRef<FlatList<FeedItem>>(null);
+  const shareCardRef = useRef<View>(null);
+  const [shareArticle, setShareArticle] = useState<Article | null>(null);
+  const [sharePreparing, setSharePreparing] = useState(false);
+  const shareInProgressRef = useRef(false);
+  const imageReadyResolveRef = useRef<(() => void) | null>(null);
 
   const HEADER_HEIGHT = insets.top + 52;
   const TAB_BAR_OFFSET = Platform.OS === 'ios' ? 100 : 90;
@@ -537,11 +588,7 @@ export default function HomeFeed() {
       }
 
       setArticles(prev => {
-        const sortArticles = (arr: Article[]) => arr.sort((a, b) => {
-          const timeA = new Date(a.published_at || a.created_at || 0).getTime();
-          const timeB = new Date(b.published_at || b.created_at || 0).getTime();
-          return timeB - timeA;
-        });
+        const sortArticles = (arr: Article[]) => rankArticles(arr, preferredRef.current);
 
         // Base case: app is empty, so we seed it natively
         if (prev.length === 0) {
@@ -603,11 +650,7 @@ export default function HomeFeed() {
           (v: Article, i: number, a: Article[]) =>
             a.findIndex(t => t.id === v.id) === i
         );
-        return unique.sort((a, b) => {
-          const timeA = new Date(a.published_at || a.created_at || 0).getTime();
-          const timeB = new Date(b.published_at || b.created_at || 0).getTime();
-          return timeB - timeA;
-        });
+        return rankArticles(unique, preferredRef.current);
       });
       setOffset(prev => prev + 15);
       if (newArticles.length < 15) {
@@ -620,8 +663,24 @@ export default function HomeFeed() {
     }
   };
 
+  // Pull the saved interests into the ref first so the very first sort already
+  // reflects them; only touch state when the selection actually changed, to
+  // avoid a pointless re-rank on every tab focus.
+  const syncPreferredCategories = useCallback(async () => {
+    const next = await loadPreferredCategories();
+    if (next.join('|') !== preferredRef.current.join('|')) {
+      preferredRef.current = next;
+      setPreferredCategories(next);
+    }
+  }, []);
+
+  // Re-order what is already on screen when the interests change.
   useEffect(() => {
-    refreshArticles(false, false);
+    setArticles(prev => (prev.length > 1 ? rankArticles(prev, preferredCategories) : prev));
+  }, [preferredCategories]);
+
+  useEffect(() => {
+    syncPreferredCategories().finally(() => refreshArticles(false, false));
     AsyncStorage.getItem('push_prompt_dismissed_v2').then((val: string | null) => {
       if (val !== 'true') setShowPushCta(true);
     });
@@ -643,13 +702,16 @@ export default function HomeFeed() {
 
   useFocusEffect(
     useCallback(() => {
+      // Picks up interest edits made in Settings while this tab was backgrounded
+      syncPreferredCategories();
+
       // Whenever users switch tabs explicitly and organically return
       const now = Date.now();
       if (now - lastRefreshTime.current > 3 * 60 * 1000) {
         console.log('[FEED-REFRESH] focus refresh');
         refreshArticles(true, false);
       }
-    }, [])
+    }, [syncPreferredCategories])
   );
 
   const onPullRefresh = useCallback(() => {
@@ -673,13 +735,56 @@ export default function HomeFeed() {
   };
 
   const handleShare = useCallback(async (article: Article) => {
+    if (shareInProgressRef.current) return;
+    shareInProgressRef.current = true;
     try {
-      await Share.share({
-        message: `${article.title}\n\nRead more:\n${article.article_url}`,
-        title: article.title,
+      setSharePreparing(true);
+      // Prefetch the image so it's cached before the card captures it
+      const prefetchUri = article.thumbnail_url || article.image_url;
+      if (prefetchUri) {
+        try { await Image.prefetch(prefetchUri); } catch {}
+      }
+      setShareArticle(article);
+      await new Promise<void>((resolve) => {
+        imageReadyResolveRef.current = resolve;
+        setTimeout(() => {
+          if (imageReadyResolveRef.current) {
+            imageReadyResolveRef.current = null;
+            resolve();
+          }
+        }, 2500);
       });
+      await new Promise((r) => setTimeout(r, 150));
+
+      const uri = await captureRef(shareCardRef, {
+        format: 'png',
+        quality: 0.9,
+        result: 'tmpfile',
+      });
+
+      try {
+        await RNShare.open({
+          url: uri.startsWith('file://') ? uri : `file://${uri}`,
+          message: `${article.title}\n\nSave time — get AIBrief24, AI news in seconds:\nhttps://play.google.com/store/apps/details?id=com.aibrief24.app`,
+          failOnCancel: false,
+        });
+      } catch (shareErr) {
+        // user cancelled or share failed — fall back to text-only
+        await Share.share({
+          message: `${article.title}\n\nSave time — get AIBrief24, AI news in seconds:\nhttps://play.google.com/store/apps/details?id=com.aibrief24.app`,
+        });
+      }
     } catch (e) {
-      console.log('[SHARE] error', e);
+      console.log('[SHARE-CARD] capture/share failed, falling back to text', e);
+      try {
+        await Share.share({
+          message: `${article.title}\n\nGet AIBrief24 — AI news in seconds:\nhttps://play.google.com/store/apps/details?id=com.aibrief24.app`,
+        });
+      } catch {}
+    } finally {
+      shareInProgressRef.current = false;
+      setShareArticle(null);
+      setSharePreparing(false);
     }
   }, []);
 
@@ -741,15 +846,24 @@ export default function HomeFeed() {
         </View>
       </View>
 
-      <Pressable
-        testID="search-btn"
-        style={styles.headerBtn}
-        onPress={() => {
-          if (!loading) router.push('/search');
-        }}
-      >
-        <Search size={20} color={Colors.textPrimary} strokeWidth={2} />
-      </Pressable>
+      <View style={styles.headerRight}>
+        {preferredCategories.length > 0 && (
+          <View testID="for-you-pill" style={styles.forYouPill}>
+            <Sparkles size={11} color={Colors.primary} />
+            <Text style={styles.forYouText}>For you</Text>
+          </View>
+        )}
+
+        <Pressable
+          testID="search-btn"
+          style={styles.headerBtn}
+          onPress={() => {
+            if (!loading) router.push('/search');
+          }}
+        >
+          <Search size={20} color={Colors.textPrimary} strokeWidth={2} />
+        </Pressable>
+      </View>
     </View>
   );
 
@@ -891,6 +1005,41 @@ export default function HomeFeed() {
           </View>
         )}
       </View>
+
+      {shareArticle && (
+        <ViewShot
+          ref={shareCardRef}
+          options={{ format: 'png', quality: 0.9 }}
+          style={{ position: 'absolute', left: -2000, top: 0, width: 1080, height: 1080 }}
+        >
+          <ShareCard
+            article={shareArticle}
+            onImageLoad={() => {
+              if (imageReadyResolveRef.current) {
+                const r = imageReadyResolveRef.current;
+                imageReadyResolveRef.current = null;
+                r();
+              }
+            }}
+            onImageError={() => {
+              if (imageReadyResolveRef.current) {
+                const r = imageReadyResolveRef.current;
+                imageReadyResolveRef.current = null;
+                r();
+              }
+            }}
+          />
+        </ViewShot>
+      )}
+
+      <Modal visible={sharePreparing} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: 'rgba(4,7,16,0.6)', alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ backgroundColor: '#0a1530', paddingVertical: 24, paddingHorizontal: 32, borderRadius: 16, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color="#00D1FF" />
+            <Text style={{ color: '#FFFFFF', marginTop: 14, fontSize: 15, fontWeight: '600' }}>Preparing share…</Text>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -940,6 +1089,25 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceHighlight,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  forYouPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    backgroundColor: `${Colors.primary}15`,
+    borderWidth: 1,
+    borderColor: `${Colors.primary}30`,
+  },
+  forYouText: {
+    fontSize: 10,
+    color: Colors.primary,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   page: { width: '100%', overflow: 'hidden' },
   imageContainer: { flex: 0.35, width: '100%', position: 'relative' },
