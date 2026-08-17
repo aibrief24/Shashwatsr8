@@ -265,7 +265,7 @@
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = "1";
 				CODE_SIGN_ENTITLEMENTS = AIBrief24/AIBrief24.entitlements;
 			};
 			name = Debug;
@@ -293,7 +293,7 @@
 				SWIFT_OBJC_BRIDGING_HEADER = "AIBrief24/AIBrief24-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = "1";
 				CODE_SIGN_ENTITLEMENTS = AIBrief24/AIBrief24.entitlements;
 			};
 			name = Release;
