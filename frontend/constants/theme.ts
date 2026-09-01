@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 export const Colors = {
   background: '#040710', // Deep midnight navy / black
   surface: '#0B1221', // Dark elevated surface
@@ -47,3 +49,21 @@ export const FontSize = {
 
 export const TELEGRAM_URL = 'https://t.me/aibrief24';
 export const WEBSITE_URL = 'https://aibrief24.com/';
+
+// ─── Store links ──────────────────────────────────────────────────────────────
+// Sharing must point at the store the sharer is actually on. Keep these two the
+// single source of truth — the share copy used to be duplicated across four
+// call sites, which drifted.
+export const STORE_URL = Platform.select({
+  ios: 'https://apps.apple.com/app/id6794633949',
+  default: 'https://play.google.com/store/apps/details?id=com.aibrief24.app',
+});
+
+export const STORE_NAME = Platform.select({
+  ios: 'the App Store',
+  default: 'Google Play',
+});
+
+/** Canonical share copy for an article. Used by every share path so they cannot drift. */
+export const buildShareMessage = (title: string) =>
+  `${title}\n\nGet AIBrief24 — AI news in seconds:\n${STORE_URL}`;

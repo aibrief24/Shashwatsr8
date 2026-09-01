@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Switch, Linking, ScrollView, 
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
-import { Colors, FontSize, Radius, Spacing, TELEGRAM_URL, WEBSITE_URL } from '@/constants/theme';
+import { Colors, FontSize, Radius, Spacing, TELEGRAM_URL, WEBSITE_URL, STORE_URL } from '@/constants/theme';
 import { Bell, Send, Globe, Share2, Shield, Info, LogOut, ChevronRight, ExternalLink, Sparkles, Trash2, X } from 'lucide-react-native';
 import { requestAndRegisterPushToken } from '@/utils/notifications';
 import CategoryPicker, { loadPreferredCategories } from '@/components/CategoryPicker';
@@ -68,7 +68,7 @@ export default function SettingsScreen() {
   const handleShareApp = async () => {
     try {
       await Share.share({
-        message: 'Check out AIBrief24 — AI news summarized in seconds:\nhttps://play.google.com/store/apps/details?id=com.aibrief24.app',
+        message: `Get AIBrief24 — AI news in seconds:\n${STORE_URL}`,
       });
     } catch (e) {
       console.log('[SHARE-APP] error', e);

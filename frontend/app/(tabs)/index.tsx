@@ -35,6 +35,7 @@ import {
   Radius,
   TELEGRAM_URL,
   WEBSITE_URL,
+  buildShareMessage,
 } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -765,20 +766,20 @@ export default function HomeFeed() {
       try {
         await RNShare.open({
           url: uri.startsWith('file://') ? uri : `file://${uri}`,
-          message: `${article.title}\n\nSave time — get AIBrief24, AI news in seconds:\nhttps://play.google.com/store/apps/details?id=com.aibrief24.app`,
+          message: buildShareMessage(article.title),
           failOnCancel: false,
         });
       } catch (shareErr) {
         // user cancelled or share failed — fall back to text-only
         await Share.share({
-          message: `${article.title}\n\nSave time — get AIBrief24, AI news in seconds:\nhttps://play.google.com/store/apps/details?id=com.aibrief24.app`,
+          message: buildShareMessage(article.title),
         });
       }
     } catch (e) {
       console.log('[SHARE-CARD] capture/share failed, falling back to text', e);
       try {
         await Share.share({
-          message: `${article.title}\n\nGet AIBrief24 — AI news in seconds:\nhttps://play.google.com/store/apps/details?id=com.aibrief24.app`,
+          message: buildShareMessage(article.title),
         });
       } catch {}
     } finally {

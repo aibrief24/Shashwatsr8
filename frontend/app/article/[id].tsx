@@ -5,7 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/services/api';
-import { Colors, FontSize, Radius, TELEGRAM_URL, WEBSITE_URL } from '@/constants/theme';
+import { Colors, FontSize, Radius, TELEGRAM_URL, WEBSITE_URL, STORE_URL } from '@/constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, ExternalLink, Share2, Bookmark, BookmarkCheck, Send, Globe, Clock, Zap } from 'lucide-react-native';
 
@@ -39,7 +39,10 @@ export default function ArticleDetail() {
   const handleShare = async () => {
     if (!article) return;
     try {
-      await Share.share({ message: `${article.title}\n\nRead more:\n${article.article_url}`, title: article.title });
+      await Share.share({
+        message: `${article.title}\n\nRead more:\n${article.article_url}\n\nGet AIBrief24 — AI news in seconds:\n${STORE_URL}`,
+        title: article.title,
+      });
     } catch { }
   };
 

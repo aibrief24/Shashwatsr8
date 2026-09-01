@@ -1,7 +1,7 @@
 // frontend/components/ShareCard.tsx
 import React from 'react';
 import { View, Text, Image, StyleSheet } from 'react-native';
-import { Colors } from '@/constants/theme';
+import { Colors, STORE_NAME } from '@/constants/theme';
 
 const CARD = 1080;
 
@@ -64,7 +64,7 @@ export default function ShareCard({ article, onImageLoad, onImageError }: Props)
         <View style={styles.footerAccent} />
         <View style={styles.footerTextWrap}>
           <Text style={styles.footerTitle}>Get AIBrief24 — AI news in seconds</Text>
-          <Text style={styles.footerSub}>Download free on Google Play</Text>
+          <Text style={styles.footerSub}>{`Download free on ${STORE_NAME}`}</Text>
         </View>
       </View>
     </View>
