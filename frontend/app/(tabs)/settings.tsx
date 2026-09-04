@@ -1,15 +1,26 @@
-import { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch, Linking, ScrollView, Platform, Alert, Share, Modal } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, Linking, ScrollView, Platform, Alert, Share, Modal, AppState } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { Colors, FontSize, Radius, Spacing, TELEGRAM_URL, WEBSITE_URL, STORE_URL } from '@/constants/theme';
 import { Bell, Send, Globe, Share2, Shield, Info, LogOut, ChevronRight, ExternalLink, Sparkles, Trash2, X } from 'lucide-react-native';
-import { requestAndRegisterPushToken } from '@/utils/notifications';
+import {
+  isPushEnabled,
+  setPushEnabled as persistPushEnabled,
+  getPushPermission,
+  requestPushPermission,
+  enablePushOnServer,
+  disablePushOnServer,
+} from '@/utils/notifications';
 import CategoryPicker, { loadPreferredCategories } from '@/components/CategoryPicker';
 
 export default function SettingsScreen() {
-  const [notifEnabled, setNotifEnabled] = useState(true);
+  // User intent (AsyncStorage) and OS permission are tracked separately; the
+  // switch shows the AND of the two, because either one being off means this
+  // device receives nothing.
+  const [pushEnabled, setPushEnabledState] = useState(true);
+  const [permGranted, setPermGranted] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [interests, setInterests] = useState<string[]>([]);
   const [showInterests, setShowInterests] = useState(false);
@@ -17,11 +28,27 @@ export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  // Permission can change outside the app (device Settings), so re-read it on
+  // mount, on focus, and whenever the app returns to the foreground.
+  const refreshPushState = useCallback(async () => {
+    const [enabled, perm] = await Promise.all([isPushEnabled(), getPushPermission()]);
+    setPushEnabledState(enabled);
+    setPermGranted(perm.status === 'granted');
+  }, []);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', state => {
+      if (state === 'active') refreshPushState();
+    });
+    return () => sub.remove();
+  }, [refreshPushState]);
+
   // Reload on focus so the row's count stays in sync with onboarding edits.
   useFocusEffect(
     useCallback(() => {
       loadPreferredCategories().then(setInterests);
-    }, [])
+      refreshPushState();
+    }, [refreshPushState])
   );
 
   const handleInterestsSaved = (selected: string[]) => {
@@ -35,33 +62,74 @@ export default function SettingsScreen() {
     router.replace('/(tabs)');
   };
 
+  // The switch is derived state, so a failed operation simply leaves the
+  // underlying values untouched and the switch snaps back on its own.
+  const notifEnabled = pushEnabled && permGranted;
+
+  const promptOpenSystemSettings = () => {
+    Alert.alert(
+      'Notifications are turned off in your device settings',
+      'Allow notifications for AIBrief24 to get important AI updates.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Open Settings', onPress: () => Linking.openSettings() },
+      ]
+    );
+  };
+
   const handleToggleNotifications = async (val: boolean) => {
+    if (isRegistering) return;
     console.log('[SETTINGS-PUSH] toggle pressed', val);
-    setNotifEnabled(val);
+    setIsRegistering(true);
 
-    if (val) {
-      if (!token) return;
-      setIsRegistering(true);
-      console.log('[SETTINGS-PUSH] register start');
-      try {
-        const success = await requestAndRegisterPushToken(token, '[SETTINGS-PUSH]');
-        console.log(`[SETTINGS-PUSH] register ${success ? 'success' : 'failure'}`);
+    try {
+      if (val) {
+        // ── Turning ON ───────────────────────────────────────────────────────
+        let granted = permGranted;
 
-        if (success) {
-          Alert.alert('Success', 'Notifications enabled');
-        } else {
-          Alert.alert('Error', 'Failed to enable notifications');
-          setNotifEnabled(false);
+        if (!granted) {
+          const current = await getPushPermission();
+          granted = current.status === 'granted';
+          setPermGranted(granted);
+
+          if (!granted && current.status === 'undetermined') {
+            const requested = await requestPushPermission();
+            granted = requested.status === 'granted';
+            setPermGranted(granted);
+          }
         }
-      } catch (e) {
-        console.log('[SETTINGS-PUSH] register error', e);
-        Alert.alert('Error', 'Failed to enable notifications');
-        setNotifEnabled(false);
-      } finally {
-        setIsRegistering(false);
+
+        if (!granted) {
+          // Denied at OS level — the switch stays off; only device Settings can fix it.
+          console.log('[SETTINGS-PUSH] permission denied — directing to system settings');
+          promptOpenSystemSettings();
+          return;
+        }
+
+        const ok = await enablePushOnServer(token ?? undefined, '[SETTINGS-PUSH]');
+        if (!ok) {
+          Alert.alert('Could not enable notifications', 'Please check your connection and try again.');
+          return;
+        }
+        await persistPushEnabled(true);
+        setPushEnabledState(true);
+        console.log('[SETTINGS-PUSH] notifications enabled');
+      } else {
+        // ── Turning OFF ──────────────────────────────────────────────────────
+        const ok = await disablePushOnServer(token ?? undefined, '[SETTINGS-PUSH]');
+        if (!ok) {
+          Alert.alert('Could not turn off notifications', 'Please check your connection and try again.');
+          return;
+        }
+        await persistPushEnabled(false);
+        setPushEnabledState(false);
+        console.log('[SETTINGS-PUSH] notifications disabled on this device');
       }
-    } else {
-      console.log('[SETTINGS-PUSH] notifications disabled locally');
+    } catch (e) {
+      console.log('[SETTINGS-PUSH] toggle error', e);
+      Alert.alert('Something went wrong', 'Please try again.');
+    } finally {
+      setIsRegistering(false);
     }
   };
 
@@ -75,13 +143,16 @@ export default function SettingsScreen() {
     }
   };
 
-  const SettingRow = ({ icon: Icon, label, value, onPress, color = Colors.textPrimary, rightElement, labelColor }: any) => (
+  const SettingRow = ({ icon: Icon, label, value, onPress, color = Colors.textPrimary, rightElement, labelColor, helper }: any) => (
     <TouchableOpacity testID={`setting-${label.toLowerCase().replace(/\s/g, '-')}`} style={styles.row} onPress={onPress} activeOpacity={onPress ? 0.7 : 1} disabled={!onPress}>
       <View style={styles.rowLeft}>
         <View style={[styles.rowIcon, { backgroundColor: (color || Colors.primary) + '15' }]}>
           <Icon size={18} color={color || Colors.primary} strokeWidth={1.5} />
         </View>
-        <Text style={[styles.rowLabel, labelColor ? { color: labelColor } : null]}>{label}</Text>
+        <View style={styles.rowTextWrap}>
+          <Text style={[styles.rowLabel, labelColor ? { color: labelColor } : null]}>{label}</Text>
+          {!!helper && <Text style={styles.rowHelper}>{helper}</Text>}
+        </View>
       </View>
       {rightElement || (value ? <Text style={styles.rowValue}>{value}</Text> : <ChevronRight size={18} color={Colors.textTertiary} />)}
     </TouchableOpacity>
@@ -110,6 +181,7 @@ export default function SettingsScreen() {
           icon={Bell}
           label="Push Notifications"
           color={Colors.primary}
+          helper={notifEnabled ? "You'll get a few high-signal AI updates a day" : 'Turn on to get important AI updates'}
           rightElement={<Switch disabled={isRegistering} value={notifEnabled} onValueChange={handleToggleNotifications} trackColor={{ false: Colors.surfaceHighlight, true: Colors.primary + '60' }} thumbColor={notifEnabled ? Colors.primary : Colors.textTertiary} />}
         />
       </View>
@@ -227,7 +299,9 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 12, fontWeight: '800', color: Colors.textTertiary, paddingHorizontal: 20, marginBottom: 12, letterSpacing: 1.5, textTransform: 'uppercase' },
   section: { marginHorizontal: 20, backgroundColor: 'rgba(11,18,33,0.8)', borderRadius: 20, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 16 },
-  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1, paddingRight: 12 },
+  rowTextWrap: { flex: 1 },
+  rowHelper: { fontSize: 13, color: Colors.textSecondary, marginTop: 3 },
   rowIcon: { width: 38, height: 38, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   rowLabel: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
   rowValue: { fontSize: 14, color: Colors.textTertiary, fontWeight: '600' },

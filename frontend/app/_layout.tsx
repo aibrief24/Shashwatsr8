@@ -8,7 +8,7 @@ import { Colors } from '@/constants/theme';
 import { useRouter } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { api } from '@/services/api';
-import { requestAndRegisterPushToken } from '@/utils/notifications';
+import { requestAndRegisterPushToken, isPushEnabled } from '@/utils/notifications';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
@@ -65,7 +65,20 @@ function GlobalAuthObserver() {
   useEffect(() => {
     if (Platform.OS === 'web') return;
     if (loading || !hasOnboarded) return;
-    requestAndRegisterPushToken(token ?? undefined).catch(() => {});
+
+    // Respect an explicit opt-out: re-registering here would silently undo the
+    // Settings toggle on the next launch.
+    let cancelled = false;
+    (async () => {
+      if (!(await isPushEnabled())) {
+        console.log('[PUSH-FLOW] auto-register skipped — notifications turned off by user');
+        return;
+      }
+      if (cancelled) return;
+      requestAndRegisterPushToken(token ?? undefined).catch(() => {});
+    })();
+
+    return () => { cancelled = true; };
   }, [loading, hasOnboarded, token]);
 
   useEffect(() => {

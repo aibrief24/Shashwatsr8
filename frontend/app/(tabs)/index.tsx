@@ -20,7 +20,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { requestAndRegisterPushToken } from '@/utils/notifications';
+import { requestAndRegisterPushToken, setPushEnabled } from '@/utils/notifications';
 import ViewShot, { captureRef } from 'react-native-view-shot';
 import RNShare from 'react-native-share';
 import ShareCard from '@/components/ShareCard';
@@ -725,7 +725,9 @@ export default function HomeFeed() {
     console.log('[DEBUG-PUSH] notification CTA pressed');
     setRegisteringPush(true);
     try {
-      await requestAndRegisterPushToken(token ?? undefined);
+      const ok = await requestAndRegisterPushToken(token ?? undefined);
+      // Explicit opt-in — record the intent so the launch gate keeps it on.
+      if (ok) await setPushEnabled(true);
     } catch (e) {
       console.log('[DEBUG-PUSH] error', e);
     } finally {

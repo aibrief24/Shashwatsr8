@@ -675,13 +675,67 @@ def register_push_token(req: PushTokenRequest, request: Request):
         pass
 
     try:
+        # Registering ALWAYS results in an active token: a token previously
+        # deactivated (by the user turning notifications off, or by the worker
+        # on DeviceNotRegistered) must come back to life here, otherwise the
+        # device would stay silent forever.
         execute(
-            "INSERT INTO push_tokens (token, platform, user_id) VALUES (%s, %s, %s) ON CONFLICT (token) DO UPDATE SET platform = %s, user_id = %s",
+            "INSERT INTO push_tokens (token, platform, user_id) VALUES (%s, %s, %s) "
+            "ON CONFLICT (token) DO UPDATE SET platform = %s, user_id = %s, "
+            "is_active = true, updated_at = NOW()",
             (req.token, req.platform, user_id, req.platform, user_id)
         )
     except Exception as e:
         logger.warning(f"Push token register error: {e}")
     return {"success": True}
+
+
+class PushUnregisterRequest(BaseModel):
+    token: str
+
+
+@api_router.post("/push/unregister")
+def unregister_push_token(req: PushUnregisterRequest, request: Request):
+    """Stop notifications to one device by deactivating its push token.
+
+    Sets the same is_active flag the notification worker filters on, so the
+    device drops out of the recipient list immediately.
+
+    Auth: none required — anonymous devices register without an account and must
+    be able to turn notifications off while logged out. If a Bearer token IS
+    present and the push token belongs to a user, the two must match.
+
+    Idempotent: an unknown token still returns 200.
+    """
+    rows = query("SELECT user_id FROM push_tokens WHERE token = %s", (req.token,))
+    if not rows:
+        logger.info("[/push/unregister] Unknown token — nothing to do")
+        return {"success": True, "message": "Token not registered"}
+
+    owner_id = rows[0].get("user_id")
+
+    # Only enforce ownership when a caller identity is actually presented.
+    if owner_id:
+        caller_id = None
+        try:
+            caller_id = get_current_user(request).get("sub")
+        except Exception:
+            caller_id = None
+        if caller_id and caller_id != owner_id:
+            logger.warning("[/push/unregister] Caller does not own this push token")
+            raise HTTPException(403, "This push token belongs to another account")
+
+    try:
+        execute(
+            "UPDATE push_tokens SET is_active = false, updated_at = NOW() WHERE token = %s",
+            (req.token,)
+        )
+    except Exception as e:
+        logger.error(f"Push token unregister error: {e}")
+        raise HTTPException(500, "Could not turn off notifications. Please try again.")
+
+    logger.info("[/push/unregister] Token deactivated")
+    return {"success": True, "message": "Notifications disabled for this device"}
 
 @api_router.post("/push/send")
 def send_notification(article_id: str = ""):

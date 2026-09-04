@@ -25,7 +25,7 @@ The content mix (arXiv papers, funding rounds, model releases, Big Tech strategy
 
 ### Current stage: **Production / live**
 Evidence in the code, not aspiration:
-- Published to Google Play (`com.aibrief24.app`, `versionCode 15`, `versionName 1.0.2`), share links point at a live Play Store listing.
+- Published to Google Play (`com.aibrief24.app`, `versionCode 15`, `versionName 1.0.2`) and live on the App Store (`id6794633949`); share links resolve per-platform.
 - Submitted to the App Store; **currently in an Apple review-rejection loop** (guideline 5.1.1, ATT purpose string — just fixed in `frontend/ios/AIBrief24/Info.plist`).
 - Real AdMob ad unit IDs wired up and `EXPO_PUBLIC_USE_TEST_ADS=false` — real ads are serving.
 - Live backend on Render (`https://aibrief24-backend.onrender.com`), live Supabase Postgres.
@@ -171,24 +171,26 @@ transform never runs), `react-native-pager-view`, `react-native-webview`, `expo-
     ├── build-1776605268060.aab        # Stale build artifact (gitignored)
     │
     ├── app/                           # expo-router file-based routes
-    │   ├── _layout.tsx      (228 L)   # ★ Root: AdsContext, AuthProvider, ATT+AdMob+FB init,
+    │   ├── _layout.tsx      (365 L)   # ★ Root: AdsContext, AuthProvider, gated ATT→AdMob boot,
     │   │                              #   GlobalAuthObserver (routing guard), deep-link capture, splash
     │   ├── index.tsx         (20 L)   # "/" — renders only a spinner; routing is done by the observer
-    │   ├── onboarding.tsx   (102 L)   # 4 static slides → completeOnboarding() → /(tabs)
+    │   ├── onboarding.tsx   (225 L)   # 5-page horizontal pager: 4 slides + CategoryPicker
     │   ├── login.tsx        (115 L)   # Email/password sign-in
     │   ├── signup.tsx       (126 L)   # Registration (handles email-confirmation-required state)
     │   ├── forgot-password.tsx(159 L) # Sends Supabase recovery email, 60s resend lockout
     │   ├── reset-password.tsx(242 L)  # Deep-link target; parses access_token OR PKCE code
     │   ├── search.tsx       (195 L)   # Debounced search + trending chips
     │   ├── privacy.tsx      (115 L)   # Static privacy policy (public route)
+    │   ├── delete-account.tsx(320 L) # Permanent account deletion (5.1.1(v)); public route,
+    │                                  #   signed-out variant + two-step destructive confirm
     │   ├── +html.tsx         (44 L)   # Web-only HTML shell
     │   ├── .privacy.tsx.swp           # ⚠ Stale 0-byte vim swap file inside the routes dir
     │   ├── (tabs)/
     │   │   ├── _layout.tsx   (89 L)   # Floating pill tab bar: Feed / Explore / Saved / Settings
-    │   │   ├── index.tsx   (1269 L)   # ★ HOME FEED — the largest file in the app
+    │   │   ├── index.tsx   (1353 L)   # ★ HOME FEED — the largest file in the app
     │   │   ├── categories.tsx(206 L)  # Category grid → per-category article list
     │   │   ├── bookmarks.tsx (110 L)  # Saved articles from context cache
-    │   │   └── settings.tsx  (171 L)  # Push toggle, links, share, sign in/out
+    │   │   └── settings.tsx  (322 L)  # Push toggle (real opt-out), interests, links, share, account
     │   └── article/[id].tsx (195 L)   # Article detail (hero image, summary, actions, CTA)
     │
     ├── contexts/
@@ -196,11 +198,16 @@ transform never runs), `react-native-pager-view`, `react-native-webview`, `expo-
     │   └── AdsContext.tsx    (20 L)   # Boolean gate: are native ad components safe to mount?
     ├── components/
     │   ├── NativeAdCard.tsx (300 L)   # Crash-safe AdMob native ad slot with a stable placeholder
-    │   ├── ShareCard.tsx    (164 L)   # 1080×1080 off-screen card rendered to PNG for sharing
+    │   ├── ShareCard.tsx    (164 L)   # 1080×1080 off-screen card → PNG; CTA uses STORE_NAME
+    │   ├── CategoryPicker.tsx(333 L)  # ★ Shared interest picker (onboarding step 5 + Settings modal);
+    │                                  #   owns PREFERRED_CATEGORIES_KEY, MIN_CATEGORY_SELECTION=3,
+    │                                  #   load/savePreferredCategories()
     │   └── NotificationPromptModal.tsx (200 L)  # ⚠ Fully built, imported NOWHERE — dead component
     ├── services/api.ts      (206 L)   # ★ fetch wrapper: timeout, 401→refresh→retry, all endpoints
-    ├── utils/notifications.ts(77 L)   # Permission → Expo push token → POST /api/push/register
-    ├── constants/theme.ts    (49 L)   # Colors, Spacing, Radius, FontSize, TELEGRAM_URL, WEBSITE_URL
+    ├── utils/notifications.ts(206 L)  # ★ Single push path: permission → token → register/unregister,
+    │                                  #   plus the `push_enabled` intent flag
+    ├── constants/theme.ts    (69 L)   # Colors/Spacing/Radius/FontSize, TELEGRAM_URL, WEBSITE_URL,
+    │                                  #   STORE_URL, STORE_NAME, buildShareMessage()
     ├── scripts/reset-project.js       # Expo template scaffolding script; unused
     ├── assets/                        # icon.png, adaptive-icon, splash-icon, favicon, SpaceMono font
     ├── android/                       # Ejected native Android (Gradle, Manifest, Kotlin entry points)
@@ -278,8 +285,12 @@ transform never runs), `react-native-pager-view`, `react-native-webview`, `expo-
 **Frontend** — `expo-router/entry` → `app/_layout.tsx` → `RootLayout`:
 1. Module scope: `SplashScreen.preventAutoHideAsync()`, `Notifications.setNotificationHandler(...)` (non-web).
 2. `RootLayout` mounts `AdsContext.Provider(adsEnabled=false)` → `GestureHandlerRootView` → `AuthProvider` → `Stack`.
-3. An effect runs `initAds()`: **iOS requests ATT via `requestTrackingPermissionsAsync()` first**, then
-   `mobileAds().initialize()` → on success `setAdsEnabled(true)`; then `FBSettings.initializeSDK()`.
+3. `useAdsBootstrap()` runs the ATT→ads chain, but **only once four gates hold**: `AppState` is
+   `active` (it subscribes and waits otherwise, and re-checks at the last moment), the root navigator
+   has mounted, `InteractionManager` has settled, and `ATT_PROMPT_DELAY_MS` (splash-hide 800 ms +
+   500 ms) has elapsed. Then `getTrackingPermissionsAsync()` → prompt **only if `undetermined`** →
+   `mobileAds().initialize()` → on success `setAdsEnabled(true)`. The Meta SDK is initialized in the
+   same step but **on Android only** (see §10 item 38).
    If AdMob init throws, `adsEnabled` stays false and only placeholders render — the app never crashes on ads.
 4. `AuthProvider` runs `loadSession()`: reads `auth_token` / `auth_refresh_token` / `has_onboarded` from
    AsyncStorage with a **3-second race timeout**, optimistically trusts the stored token, sets `loading=false`.
@@ -289,7 +300,10 @@ transform never runs), `react-native-pager-view`, `react-native-webview`, `expo-
    - `!hasOnboarded` → `/onboarding`
    - `!token` → allowed segments `[(tabs), article, search, login, signup, forgot-password, reset-password, privacy]`, else `replace('/(tabs)')`
    - `token` → allowed `[(tabs), article, search, privacy, reset-password]`, else `replace('/(tabs)')`
-   - `PUBLIC_ROUTES = ['/privacy','/terms','/support','/delete-account']` bypass everything (note: `/terms`, `/support`, `/delete-account` **do not exist as routes**).
+   - `PUBLIC_ROUTES = ['/privacy','/terms','/support','/delete-account']` bypass everything. `/privacy`
+     and `/delete-account` exist; **`/terms` and `/support` still do not**. Because the observer returns
+     early on these paths it will not navigate when the token clears — which is why `delete-account.tsx`
+     does its own `router.replace('/(tabs)')` after a successful deletion.
    It also registers the notification-response listener and calls `requestAndRegisterPushToken`.
 
 ### API layer — every endpoint
@@ -308,26 +322,28 @@ validated by `get_current_user()` in `backend/auth.py`, which makes a **live HTT
 | 6 | POST | `/api/auth/update-password` | – (token in body) | `{access_token, new_password}` | `{success, message}` | `update_password` |
 | 7 | POST | `/api/auth/exchange-code` | – | `{code}` | Raw Supabase PKCE token payload | `exchange_code` |
 | 8 | POST | `/api/auth/logout` | optional | – | `{success:true}` (always 200) | `logout` |
-| 9 | GET | `/api/articles` | – | `?category=&limit=50&offset=0` | `{articles:[…], total:int}` | `get_articles` |
-| 10 | GET | `/api/articles/breaking` | – | – | `{articles:[…]}` (`is_breaking=true`, max 10) | `get_breaking` |
-| 11 | GET | `/api/articles/search` | – | `?q=&limit=20` | `{articles:[…], total}` (synonym-expanded, relevance-ranked) | `search_articles` |
-| 12 | GET | `/api/articles/{article_id}` | – | UUID path param | Single article object; **404** if absent, **500** if not a valid UUID | `get_article` |
-| 13 | GET | `/api/categories` | – | – | `{categories:[{name,count}] × 9}` | `get_categories` |
-| 14 | GET | `/api/bookmarks` | ✅ | – | `{bookmarks:[full article rows]}` | `get_bookmarks` |
-| 15 | POST | `/api/bookmarks` | ✅ | `{article_id}` | `{success:true,message}` or `{success:false,error:"BOOKMARK_LIMIT_REACHED",message}` | `add_bookmark` |
-| 16 | DELETE | `/api/bookmarks/{article_id}` | ✅ | path param | `{success:true,message:"Removed"}` | `remove_bookmark` |
-| 17 | GET | `/api/bookmarks/ids` | ✅ | – | `{ids:[uuid strings]}` | `get_bookmark_ids` |
-| 18 | POST | `/api/push/register` | optional | `{token, platform}` | `{success:true}`; upserts on `token` conflict | `register_push_token` |
-| 19 | POST | `/api/push/send` | ⚠ **NONE** | `?article_id=` (query) | `{success, sent, errors, tokens}` — blasts **all** tokens immediately | `send_notification` |
-| 20 | POST | `/api/admin/ingest` | `X-Admin-Key` | – | `{status:"accepted", message}` — returns instantly, work runs in a BackgroundTask | `trigger_ingestion` |
-| 21 | POST | `/api/admin/process-notifications` | `X-Admin-Key` | – | `{success, processed, sent, failed, no_tokens}` | `process_notifications` |
-| 22 | GET | `/api/admin/notification-status` | `X-Admin-Key` | – | `{jobs:{status→count}, tokens:{active,inactive,total}}` | `notification_status` |
-| 23 | POST | `/api/admin/recategorize` | ⚠ **NONE** | – | `{updated, total_checked}` — rewrites `category` on every article | `recategorize_articles` |
-| 24 | GET | `/api/settings` | – | – | `{notifications_enabled_default, telegram_url, website_url}` (hardcoded fallback if table empty) | `get_settings` |
-| 25 | GET | `/api/sources` | – | – | `{sources:[{name,url,type,active,category_hint}], total}` | `get_sources` |
-| 26 | GET | `/api/health` | – | – | `{status, auth, database, articles_count, sources_count}` | `health` |
-| 27 | GET | `/api/health/db` | – | – | `{status:"ok", result:1}`; **503** on failure | `health_db` |
-| 28 | GET | `/api/` | – | – | `{app:"AIBrief24", version:"2.0.0", tagline, auth:"supabase"}` | `root` |
+| 9 | DELETE | `/api/auth/account` | ✅ | – | `{success:true, message:"Account deleted"}`. Deletes bookmarks → push_tokens → users (each best-effort, logged and continued), then the Supabase Auth user via the Admin API, which **must** succeed or it returns **500** `{success:false, message, detail}` | `delete_account` |
+| 10 | GET | `/api/articles` | – | `?category=&limit=50&offset=0` | `{articles:[…], total:int}` | `get_articles` |
+| 11 | GET | `/api/articles/breaking` | – | – | `{articles:[…]}` (`is_breaking=true`, max 10) | `get_breaking` |
+| 12 | GET | `/api/articles/search` | – | `?q=&limit=20` | `{articles:[…], total}` (synonym-expanded, relevance-ranked) | `search_articles` |
+| 13 | GET | `/api/articles/{article_id}` | – | UUID path param | Single article object; **404** if absent, **500** if not a valid UUID | `get_article` |
+| 14 | GET | `/api/categories` | – | – | `{categories:[{name,count}] × 9}` | `get_categories` |
+| 15 | GET | `/api/bookmarks` | ✅ | – | `{bookmarks:[full article rows]}` | `get_bookmarks` |
+| 16 | POST | `/api/bookmarks` | ✅ | `{article_id}` | `{success:true,message}` or `{success:false,error:"BOOKMARK_LIMIT_REACHED",message}` | `add_bookmark` |
+| 17 | DELETE | `/api/bookmarks/{article_id}` | ✅ | path param | `{success:true,message:"Removed"}` | `remove_bookmark` |
+| 18 | GET | `/api/bookmarks/ids` | ✅ | – | `{ids:[uuid strings]}` | `get_bookmark_ids` |
+| 19 | POST | `/api/push/register` | optional | `{token, platform}` | `{success:true}`; upserts on `token` conflict and **re-activates** (`is_active=true, updated_at=NOW()`) | `register_push_token` |
+| 20 | POST | `/api/push/unregister` | optional* | `{token}` | `{success:true, message}`; sets `is_active=false`. Idempotent — unknown token still 200. *If a Bearer is present **and** the row has a `user_id`, they must match or **403** | `unregister_push_token` |
+| 21 | POST | `/api/push/send` | ⚠ **NONE** | `?article_id=` (query) | `{success, sent, errors, tokens}` — blasts **all** tokens immediately | `send_notification` |
+| 22 | POST | `/api/admin/ingest` | `X-Admin-Key` | – | `{status:"accepted", message}` — returns instantly, work runs in a BackgroundTask | `trigger_ingestion` |
+| 23 | POST | `/api/admin/process-notifications` | `X-Admin-Key` | – | `{success, processed, sent, failed, no_tokens}` | `process_notifications` |
+| 24 | GET | `/api/admin/notification-status` | `X-Admin-Key` | – | `{jobs:{status→count}, tokens:{active,inactive,total}}` | `notification_status` |
+| 25 | POST | `/api/admin/recategorize` | ⚠ **NONE** | – | `{updated, total_checked}` — rewrites `category` on every article | `recategorize_articles` |
+| 26 | GET | `/api/settings` | – | – | `{notifications_enabled_default, telegram_url, website_url}` (hardcoded fallback if table empty) | `get_settings` |
+| 27 | GET | `/api/sources` | – | – | `{sources:[{name,url,type,active,category_hint}], total}` | `get_sources` |
+| 28 | GET | `/api/health` | – | – | `{status, auth, database, articles_count, sources_count}` | `health` |
+| 29 | GET | `/api/health/db` | – | – | `{status:"ok", result:1}`; **503** on failure | `health_db` |
+| 30 | GET | `/api/` | – | – | `{app:"AIBrief24", version:"2.0.0", tagline, auth:"supabase"}` | `root` |
 
 **Route-order note:** `/articles/breaking` (line 422) and `/articles/search` (line 495) are declared
 *before* `/articles/{article_id}` (line 543), so they are matched correctly. Do not reorder them.
@@ -404,6 +420,8 @@ bare `try/except` and its result is discarded anyway (see §10).
 `user_id` TEXT (nullable — anonymous devices register too), `created_at` TIMESTAMPTZ,
 plus migration-added `is_active` BOOLEAN default true, `last_success_at` TIMESTAMPTZ, `last_error` TEXT,
 `updated_at` TIMESTAMPTZ. Index `idx_push_tokens_active` on `is_active`.
+`is_active` is the single delivery kill-switch: the worker filters on it, `DeviceNotRegistered`
+clears it, `/push/unregister` clears it, and `/push/register` restores it.
 
 #### `notification_jobs` *(created by `_run_migrations`)*
 `id` UUID PK, `article_id` UUID NOT NULL, `status` TEXT default `'pending'`
@@ -452,7 +470,7 @@ push_tokens.token    ──► notification_logs.token
 | **Unsplash CDN** | 30-URL + 20-URL fallback image pools; also native `?w&q&fm=webp` transforms | `ingestor.IMAGE_POOL`, `image_optimizer._optimize_unsplash_url()` |
 | **Google favicon** `s2/favicons` | source logo in the no-image placeholder | `(tabs)/index.tsx` `ImageBlock` |
 | **Google AdMob** | native ads in-feed | `components/NativeAdCard.tsx`, `app/_layout.tsx` |
-| **Meta (Facebook) SDK** | install/event attribution | `app/_layout.tsx` `FBSettings.initializeSDK()` |
+| **Meta (Facebook) SDK** | install/event attribution — **Android only**; the iOS project has no Meta config at all (§10 item 38) | `app/_layout.tsx` `initAdSdks()` |
 
 ---
 
@@ -497,7 +515,8 @@ shows a one-shot "Session Expired" alert (guarded by a module-level `sessionAler
 **Password reset** (the most intricate flow — see §7.5).
 
 **Storage:** `auth_token`, `auth_refresh_token`, `has_onboarded`, `push_prompt_dismissed_v2`,
-`@pending_reset_url` — all in **plaintext AsyncStorage** (no Keychain/Keystore, no expo-secure-store).
+`push_enabled`, `preferred_categories`, `@pending_reset_url` — all in **plaintext AsyncStorage**
+(no Keychain/Keystore, no expo-secure-store).
 
 **Authorization:** there is effectively one role — an authenticated user. Ownership is enforced by
 always scoping bookmark queries with `WHERE user_id = %s` from the verified token. Admin endpoints use a
@@ -565,6 +584,16 @@ app/(tabs)/index.tsx :: HomeFeed
            · first load  → dedupe by id, sort published_at DESC, setOffset(n), setHasMore(n===20)
            · later loads → prepend only ids not already present, Image.prefetch() them,
                            shift `offset` by the number injected at the top
+  └ ORDERING: rankArticles(rows, preferredRef.current)               [index.tsx:107]
+       · no interests saved → published_at DESC (unchanged legacy behaviour)
+       · interests saved    → day bucket DESC, then preferred-category first, then
+                              published_at DESC — so personalization never lifts stale
+                              news above fresh news. Purely client-side; the API call,
+                              pagination and dedupe-by-id are untouched.
+       · preferred list is read from AsyncStorage on mount and re-read in useFocusEffect,
+         mirrored into a ref so AppState-captured closures see the current value
+  └ HEADER: a "For you" pill renders beside the search button whenever
+       preferredCategories.length > 0 — the only visible signal that the feed is re-ranked
   └ useMemo feedItems  → inserts {type:'ad', id:`ad-after-${i}`} after every 5 articles [index.tsx:524]
   └ <FlatList pagingEnabled snapToInterval={CARD_HEIGHT} getItemLayout=…>
        renderItem = renderCard  → NativeAdCard | ArticleCard                [index.tsx:749]
@@ -689,12 +718,24 @@ notification_worker.run_pending_jobs(limit=50)                          [notific
     Failure path: attempt_count >= max_attempts → 'failed', else reset to 'pending' for retry
 
 Device side:
-  utils/notifications.ts :: requestAndRegisterPushToken()               [notifications.ts:7]
-    · Android: Notifications.setNotificationChannelAsync('default', importance MAX)
-    · requires Device.isDevice; requests permission if not already granted
-    · Notifications.getExpoPushTokenAsync({projectId})  ← projectId from expoConfig.extra.eas,
-      with the literal UUID hardcoded as a last-resort fallback
-    · api.registerPushToken(token, Platform.OS, authToken) → POST /api/push/register
+  utils/notifications.ts — the ONE push path, split into composable pieces:
+    · getPushPermission() / requestPushPermission()  read vs. prompt, kept separate so the OFF
+                            path can fetch a token WITHOUT triggering a permission dialog
+    · getExpoPushToken()    Android channel setup, Device.isDevice guard, projectId from
+                            expoConfig.extra.eas (literal UUID as last-resort fallback)
+    · enablePushOnServer()  → api.registerPushToken()  → POST /api/push/register
+    · disablePushOnServer() → api.unregisterPush()     → POST /api/push/unregister
+    · isPushEnabled() / setPushEnabled()   the `push_enabled` intent flag
+    · requestAndRegisterPushToken()  full opt-in flow built on the above; signature unchanged,
+                            still used by _layout.tsx (launch) and the feed "Enable" CTA
+
+  Launch auto-register is GATED: _layout.tsx skips it when isPushEnabled() === false, so an
+  opt-out is never silently undone on the next cold start.
+
+  Settings toggle: displayed value = push_enabled AND OS permission (derived, never optimistic).
+    ON  + undetermined → prompt → register    ON  + denied → Alert w/ Linking.openSettings()
+    ON  + granted      → register             OFF          → unregister
+    Permission re-read on mount, useFocusEffect, and AppState 'active'.
 
   Tap handling: app/_layout.tsx :: GlobalAuthObserver                    [_layout.tsx:34]
     · getLastNotificationResponseAsync() for cold start
@@ -760,11 +801,20 @@ true only after `mobileAds().initialize()` resolves. `NativeAdCard` refuses to m
 until then; this is an explicit boot-crash guard, documented in the component header.
 
 **Local-only state of note:** `HomeFeed` owns `articles`, `offset`, `hasMore`, `loading`, `refreshing`,
-`shareArticle`, `sharePreparing` and several `useRef`s (`lastRefreshTime`, `shareInProgressRef`,
-`imageReadyResolveRef`, `flatListRef`). `CategoriesScreen` owns its own separate article list and pagination.
+`shareArticle`, `sharePreparing`, `preferredCategories` and several `useRef`s (`lastRefreshTime`,
+`shareInProgressRef`, `imageReadyResolveRef`, `flatListRef`, `preferredRef`).
+`CategoriesScreen` owns its own separate article list and pagination.
+`SettingsScreen` owns `pushEnabled` + `permGranted` (the toggle is the AND of the two — derived, never
+optimistically flipped) and `interests`, both re-read on focus and on AppState `active`.
+
+**Personalization is deliberately NOT in context.** `preferred_categories` is read straight from
+AsyncStorage by whoever needs it (`HomeFeed`, `CategoryPicker`, `SettingsScreen`) via
+`loadPreferredCategories()`. There is no provider, so a change in Settings reaches the feed on its
+next `useFocusEffect`, not instantly.
 
 **Persistence (AsyncStorage keys):** `auth_token`, `auth_refresh_token`, `has_onboarded`,
-`push_prompt_dismissed_v2`, `@pending_reset_url`.
+`push_prompt_dismissed_v2`, `push_enabled` (unset ⇒ true), `preferred_categories`,
+`@pending_reset_url`.
 
 ### Navigation — expo-router (file-based), typed routes enabled
 
@@ -777,6 +827,7 @@ app/_layout.tsx  (Stack, headerShown:false, animation:'none', bg Colors.backgrou
 ├── forgot-password           "/forgot-password"
 ├── reset-password            "/reset-password"          deep-link target (aibrief24://reset-password)
 ├── privacy                   "/privacy"                 public route
+├── delete-account            "/delete-account"          public route; account deletion
 ├── search                    "/search"                  animation: slide_from_right
 ├── article/[id]              "/article/:id"             animation: slide_from_right
 └── (tabs)/_layout.tsx        floating pill tab bar, absolute-positioned, 4 tabs
@@ -860,9 +911,12 @@ the app stores. Push receipts are **polled**, not pushed.
     snapshots of a March 2026 database, not invariants.
 14. **The whole backend test suite requires a live deployment** (`EXPO_PUBLIC_BACKEND_URL`) and skips
     entirely without it. There are **zero unit tests** — no mocking, no fixtures, no local DB.
-15. **`components/NotificationPromptModal.tsx` (200 lines) is imported nowhere.** The comment
-    `// removed auto-prompting NotificationObserver` in `_layout.tsx:115` explains why. `login.tsx` and
-    `signup.tsx` still declare an unused `showNotificationModal` state from that era.
+15. **`components/NotificationPromptModal.tsx` (200 lines) is still imported nowhere.** The comment
+    `// removed auto-prompting NotificationObserver` in `_layout.tsx` explains why. `login.tsx` and
+    `signup.tsx` still declare an unused `showNotificationModal` state from that era. It now calls the
+    refactored `requestAndRegisterPushToken()` (signature unchanged), so it still compiles — but it
+    does **not** write the `push_enabled` intent flag, so if it were ever wired up it would grant
+    permission without recording consent. Delete it, or finish it properly.
 16. **`feedArticlesCache` is permanently empty**, so `search.tsx`'s local instant-filter branch
     (`search.tsx:43-50`) never produces results. Every keystroke goes to the network after a 400 ms debounce.
 17. **`app/.privacy.tsx.swp`** — a 0-byte vim swap file inside the expo-router routes directory. Harmless
@@ -915,19 +969,43 @@ the app stores. Push receipts are **polled**, not pushed.
 34. **`is_breaking` is never set true anywhere in the codebase** (always inserted `false`,
     `ingestor.py:845`). `/api/articles/breaking`, the BREAKING badge in the feed and detail screens, and the
     breaking-first push priority are all permanently dormant.
-35. **The Settings notification toggle is cosmetic when turned off.** `settings.tsx:47` just logs
-    "disabled locally" — no API call, no persistence, and the state resets to `true` on remount.
+35. ~~The Settings notification toggle is cosmetic when turned off.~~ **FIXED.** The switch is now
+    derived from `push_enabled` AND the OS permission; OFF calls `/push/unregister` to clear
+    `is_active`, ON re-registers, and the launch auto-register respects the opt-out.
+    **Remaining gap:** `/push/register` still swallows DB errors and returns `{"success": true}`
+    regardless, so a failed ON is invisible to the client. Deferred to v1.2 on purpose — fixing
+    it would start returning new 500s to already-shipped builds.
 36. **Version numbers disagree in four places:** `app.json` `version: 1.0.2` / `versionCode 15`;
     `android/app/build.gradle` `versionCode 15` / `versionName "1.0.2"`; `ios/…/Info.plist`
     `CFBundleShortVersionString 1.0.1` / `CFBundleVersion 1`; and `settings.tsx:113` hardcodes
     `App Version 1.0.0` in the UI. `eas.json` also sets `appVersionSource: "remote"` + `autoIncrement`,
     so EAS overrides some of these at build time anyway.
-37. **`app.json`'s `ios.infoPlist` is dead config** because `frontend/ios/` exists — the native
-    `Info.plist` wins. `app.json` still carries the old vague `NSUserTrackingUsageDescription` that Apple
-    rejected. **Running `expo prebuild --clean` will regenerate `Info.plist` from `app.json` and reintroduce
-    the rejected string** (and drop `ITSAppUsesNonExemptEncryption`). Sync `app.json` before any prebuild.
-38. **ATT is requested at cold start**, before the user sees any content (`_layout.tsx:165`). This is a
-    common App Review flag on its own, independent of the purpose-string wording.
+37. ~~`app.json`'s `ios.infoPlist` would regress the Apple fixes on a prebuild.~~ **RESOLVED.**
+    `app.json`'s `ios.infoPlist` is still dead config at runtime — `frontend/ios/` exists, so the native
+    `Info.plist` wins — but it now mirrors the native values, so `expo prebuild --clean` reproduces them
+    instead of reverting them. All three Apple-facing fixes are synced:
+    `NSUserTrackingUsageDescription` (byte-identical to the native string), `ITSAppUsesNonExemptEncryption:
+    false`, and `supportsTablet: false` matching `TARGETED_DEVICE_FAMILY = "1"` in both Debug and Release
+    of the sole `AIBrief24` target. Note App Store Connect keeps its own device-family record; stale iPad
+    screenshots on the listing must still be removed separately.
+    **One prebuild hazard remains, tracked in item 38:** the `react-native-fbsdk-next` plugin block is
+    cross-platform and still declares `isAutoInitEnabled: true` / `autoLogAppEventsEnabled: true`, so a
+    prebuild would newly write Meta config into the iOS plist and activate it there for the first time.
+    Those flags were left alone on purpose — flipping them would disable Meta attribution on Android too.
+38. ~~ATT is requested at cold start, before the user sees any content.~~ **FIXED** — this had caused a
+    Guideline 2.1 rejection: iOS silently no-ops `requestTrackingPermissionsAsync()` unless the app is
+    `active`, so the dialog never appeared for the reviewer. `useAdsBootstrap()` (`_layout.tsx:205`) now
+    gates the prompt on AppState `active` + root navigator mounted + interactions settled +
+    `ATT_PROMPT_DELAY_MS` (1300 ms, deliberately past the 800 ms splash hide — both read the shared
+    `SPLASH_HIDE_DELAY_MS` constant so they cannot drift). It prompts **only** when the status is
+    `undetermined`, and ad SDK init is gated on the resolved status so no tracking-enabled request
+    precedes consent.
+    Related: the **Meta SDK is now Android-only** (`initAdSdks()`). The iOS project has no Facebook
+    configuration whatsoever — no `FacebookAppID`, `FacebookClientToken`, or `fb<appid>` URL scheme in
+    `ios/AIBrief24/Info.plist`, because the `react-native-fbsdk-next` config plugin was never applied to
+    this ejected `ios/` directory. Meta attribution on iOS is therefore **broken, not disabled**: the pod
+    ships but is inert. `app.json` still declares `isAutoInitEnabled: true` / `autoLogAppEventsEnabled:
+    true`, which would take effect — and newly enable Meta on iOS — on any future prebuild.
 39. **`design_guidelines.json` does not match the shipped design.** It specifies `#020617`/`#3B82F6`;
     `constants/theme.ts` ships `#040710`/`#00D1FF`. Trust `theme.ts`.
 40. **No `babel.config.js` exists at all**, so `react-native-dotenv` never runs. Only `EXPO_PUBLIC_*`
@@ -941,9 +1019,10 @@ the app stores. Push receipts are **polled**, not pushed.
 44. **Two virtualenvs in `backend/`** (`venv/` and `.venv/`), neither gitignored by name.
 45. **`GET /api/articles/{id}` returns 500, not 404, for a non-UUID id** — a raw Postgres cast error.
     This is documented as a known bug in `test_aibrief_api.py:210-219` and was never fixed.
-46. **`GlobalAuthObserver` whitelists `/terms`, `/support`, `/delete-account`** as public routes
-    (`_layout.tsx:70`) — **none of these screens exist**. Google Play and Apple both commonly require an
-    in-app account-deletion path; this looks like a planned-but-unbuilt requirement.
+46. **`GlobalAuthObserver` whitelists `/terms`, `/support`, `/delete-account`** as public routes —
+    `/delete-account` now exists (App Store 5.1.1(v)), but **`/terms` and `/support` still do not**.
+    Both stores commonly expect a reachable Terms and a support contact; today the only support
+    surface is the `aibrief2526@gmail.com` mailto in `privacy.tsx`.
 47. **`memory/PRD.md` and `test_result.md` are historically valuable but stale** — they describe
     GPT-3.5-turbo (now gpt-4o-mini), a 25-image pool, an `/admin/fix-images` endpoint that doesn't exist,
     and one-aggregated-notification-per-run behaviour that the job queue replaced. `.emergent/summary.txt`
@@ -1064,8 +1143,16 @@ thumbnails to load.
 - Bookmarks with optimistic UI, rollback, and a DB-enforced 100-item cap.
 - Ingestion pipeline: 2-hour cron, AI summaries, hybrid LLM+keyword categorization, AI-relevance filtering, cross-source story clustering, URL dedupe, multi-strategy image resolution with arXiv-specific handling, thumbnail optimization.
 - Push notifications: durable job queue, `SKIP LOCKED` claiming, batching, receipt polling, automatic dead-token deactivation, daily caps, min-gap spacing, IST quiet hours, freshness gating.
-- Monetization: AdMob native ads live (`USE_TEST_ADS=false`), Meta SDK attribution.
-- Share-to-social: off-screen 1080×1080 `ShareCard` captured to PNG with a text fallback chain.
+- Monetization: AdMob native ads live (`USE_TEST_ADS=false`); Meta SDK attribution on **Android only**.
+- Account deletion end-to-end (`DELETE /api/auth/account` + `app/delete-account.tsx`), satisfying
+  App Store guideline 5.1.1(v).
+- Category personalization: 3-of-9 interest picker shared by onboarding step 5 and Settings, with a
+  client-side day-bucketed feed re-rank and a "For you" pill in the feed header when active.
+- Notification opt-out that actually stops delivery (`/push/unregister` clears `is_active`, which the
+  worker filters on), with the launch auto-register gated on the stored intent.
+- Share-to-social: off-screen 1080×1080 `ShareCard` captured to PNG with a text fallback chain;
+  the store link and card CTA are platform-correct via `STORE_URL` / `STORE_NAME` in `theme.ts`,
+  and all share copy comes from the single `buildShareMessage()` builder.
 - Android: shipped to Google Play at versionCode 15.
 
 ### 🟡 In progress
@@ -1076,9 +1163,7 @@ thumbnails to load.
   is being actively adjusted against real Product Hunt / stale-feed behaviour.
 
 ### ❌ Missing / not built
-- **Account deletion** — whitelisted as a route in `_layout.tsx` but the screen does not exist. Commonly required by both stores.
-- **Terms of Service and Support screens** — same situation.
-- Working notification opt-**out** (the Settings toggle only works one way).
+- **Terms of Service and Support screens** — whitelisted in `PUBLIC_ROUTES` but never built.
 - Breaking-news detection — the entire `is_breaking` feature path is dead (§10 item 34).
 - Any unit tests; any test that runs without a live deployment.
 - Row Level Security policies in Supabase (open P3 item in the PRD).
@@ -1088,7 +1173,7 @@ thumbnails to load.
 
 ### First things to fix if you pick this up
 1. Add `_require_admin` to `/api/push/send` and `/api/admin/recategorize`; verify `ADMIN_KEY` is set on Render (§10 items 1–3).
-2. Sync `app.json`'s `NSUserTrackingUsageDescription` with the native `Info.plist` so a prebuild can't regress the Apple fix (§10 item 37).
-3. Build the account-deletion screen before the next store review round.
+2. Decide the Meta-on-iOS posture before any `expo prebuild`: the plugin's cross-platform `isAutoInitEnabled` / `autoLogAppEventsEnabled` would activate Meta on iOS for the first time, pre-consent (§10 items 37–38).
+3. Build the Terms and Support screens; they are whitelisted as public routes but do not exist (§10 item 46).
 4. Delete or repair the stale artifacts: `disable_broken_feeds.py`, `NotificationPromptModal.tsx`, `.privacy.tsx.swp`, `fix_article_images()`, the dead `profiles` query, one of the two lockfiles, one of the two virtualenvs.
 5. Decide whether arXiv interleaving matters — then either stop re-sorting on the client or stop curating on the server (§10 item 22).

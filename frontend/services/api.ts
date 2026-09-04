@@ -197,6 +197,9 @@ export const api = {
   registerPushToken: (pushToken: string, platform: string, authToken?: string) =>
     request('/push/register', { method: 'POST', body: JSON.stringify({ token: pushToken, platform }), headers: authHeaders(authToken) }),
 
+  unregisterPush: (pushToken: string, authToken?: string) =>
+    request('/push/unregister', { method: 'POST', body: JSON.stringify({ token: pushToken }), headers: authHeaders(authToken) }),
+
   // Settings
   getSettings: () => request('/settings'),
 

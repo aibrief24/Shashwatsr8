@@ -15,7 +15,8 @@
         "NSCameraUsageDescription": "Take photos to share with articles",
         "NSPhotoLibraryUsageDescription": "Allow access to save and share article images.",
         "NSPhotoLibraryAddUsageDescription": "Allow saving article images to your photo library.",
-        "NSUserTrackingUsageDescription": "This identifier will be used to deliver personalized ads to you.",
+        "NSUserTrackingUsageDescription": "AIBrief24 uses this to show ads relevant to your interests, such as technology and AI products, and to measure ad performance. This helps keep the app free.",
+        "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": [
           "remote-notification"
         ]
