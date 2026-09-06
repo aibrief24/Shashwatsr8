@@ -27,8 +27,10 @@ import { useAds } from '@/contexts/AdsContext';
 import { Colors, Radius, FontSize } from '@/constants/theme';
 
 // ── Safe ad mode flag ────────────────────────────────────────────────────────
-// Defaults to test ads unless explicitly set to the string 'false'.
-const USE_TEST_ADS = process.env.EXPO_PUBLIC_USE_TEST_ADS !== 'false';
+// Fail-safe: defaults to REAL ads. Only the explicit string 'true' opts into
+// Google test ads, so a missing/unset variable in a release build can never
+// silently ship test ads (which always fill and always earn zero).
+const USE_TEST_ADS = process.env.EXPO_PUBLIC_USE_TEST_ADS === 'true';
 
 // Official Google test native ad unit IDs (from react-native-google-mobile-ads TestIds)
 const GOOGLE_TEST_NATIVE_ANDROID = 'ca-app-pub-3940256099942544/2247696110';
@@ -109,8 +111,11 @@ function NativeAdLoader({ cardHeight, tabBarOffset }: NativeAdCardProps) {
                 adRef.current = ad;
                 setNativeAd(ad);
             })
-            .catch(() => {
-                // Ad load failure is non-fatal — placeholder remains visible.
+            .catch((e: any) => {
+                // Ad load failure is non-fatal — placeholder remains visible —
+                // but log the AdMob error code so no-fill can be told apart
+                // from a bad unit ID / unapproved app.
+                console.warn(`[AdMob] Native ad load failed unit=${NATIVE_AD_UNIT_ID} code=${e?.code} msg=${e?.message}`);
             });
 
         return () => {
