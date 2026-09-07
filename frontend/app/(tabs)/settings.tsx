@@ -213,7 +213,7 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         {/* TODO: read from Constants.expoConfig?.version instead of hardcoding — this string
             has drifted from app.json/Info.plist/pbxproj every release so far. */}
-        <SettingRow icon={Info} label="App Version" value="1.1.0" color={Colors.textTertiary} />
+        <SettingRow icon={Info} label="App Version" value="1.1.1" color={Colors.textTertiary} />
         <View style={styles.divider} />
         <SettingRow icon={Shield} label="Privacy Policy" color={Colors.textTertiary} onPress={() => router.push('/privacy' as any)} />
       </View>
